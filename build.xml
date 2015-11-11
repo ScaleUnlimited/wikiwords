@@ -245,13 +245,30 @@
 	</target>
 
 	<!-- ================================================================== -->
-	<!-- Install in local Maven repository									-->
+	<!-- Hadoop job jar                                                     -->
 	<!-- ================================================================== -->
 
-	<target name="install"
-			depends="jar, mvn-install"
-			description="--> install SNAPSHOT jar to local repository">
+	<target name="job"
+	        depends="compile"
+	        description="--> create a Hadoop ready jar with all dependencies">
+
+		<!-- Make sure lib/ dir starts out empty, so we don't get multiple
+		     copies of jars with slightly different versions
+		 -->
+		<delete dir="${build.dir}/lib" />
+		<mkdir dir="${build.dir}/lib" />
+
+		<copy todir="${build.dir}/lib" flatten="true">
+			<path refid="runtime.classpath" />
+		</copy>
+
+		<jar destfile="${build.dir}/${job.name}" compress="true">
+			<fileset dir="${build.dir.main-classes}" />
+			<fileset dir="${main.res.dir}" />
+			<fileset dir="${build.dir}" includes="lib/" />
+		</jar>
 	</target>
+
 
 	<!-- ================================================================== -->
 	<!-- Generating eclipse file                                            -->

@@ -19,11 +19,13 @@ public class WikiDumpToolTest {
     public void test() throws Exception {
         WikiDumpTool tool = new WikiDumpTool();
         
-        File outputDir = new File("build/test/WikiDumpToolTest/test/");
+        File outputDir = new File("build/test/WikiDumpToolTest/test/output/");
         outputDir.mkdirs();
-        FileUtils.cleanDirectory(outputDir);
         
-        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), 5, 10);
+        File metadataDir = new File("build/test/WikiDumpToolTest/test/metadata/");
+        metadataDir.mkdirs();
+        
+        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), metadataDir.getAbsolutePath(), 5, 10);
         
         assertEquals(10, (int)counters.get(WikiDumpTool.MAIN_PAGE_COUNTER));
         assertEquals(20, (int)counters.get(WikiDumpTool.REDIRECT_PAGE_COUNTER));
@@ -53,11 +55,13 @@ public class WikiDumpToolTest {
     public void testCompressedOutput() throws Exception {
         WikiDumpTool tool = new WikiDumpTool();
         
-        File outputDir = new File("build/test/WikiDumpToolTest/testCompressedOutput/");
+        File outputDir = new File("build/test/WikiDumpToolTest/testCompressedOutput/output/");
         outputDir.mkdirs();
-        FileUtils.cleanDirectory(outputDir);
         
-        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), 5, 10, true, 1.0f);
+        File metadataDir = new File("build/test/WikiDumpToolTest/testCompressedOutput/metadata/");
+        metadataDir.mkdirs();
+        
+        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), metadataDir.getAbsolutePath(), 5, 10, true, 1.0f);
         assertEquals(10, (int)counters.get(WikiDumpTool.MAIN_PAGE_COUNTER));
         assertEquals(20, (int)counters.get(WikiDumpTool.REDIRECT_PAGE_COUNTER));
         assertEquals(1, (int)counters.get(WikiDumpTool.FILE_PAGE_COUNTER));
@@ -78,6 +82,8 @@ public class WikiDumpToolTest {
         assertEquals("King_of_the_Hill_(season_4)", filter.getRedirect("#REDIRECT:[[King of the Hill (season 4)]]"));
         assertEquals("Uzel_Holding", filter.getRedirect("#REDIRECT: [[Uzel Holding]]"));
         assertEquals("Taif_Agreement", filter.getRedirect("#REDIRECT\n\n[[Taif Agreement]]"));
+        assertEquals("Beşiktaş_J.K.", filter.getRedirect("\n\n#REDIRECT: [[Beşiktaş J.K.]]"));
+        assertEquals("How_I_Met_Your_Mother", filter.getRedirect("#redirect : [[How I Met Your Mother]]"));
         filter.close();
     }
     
@@ -85,13 +91,15 @@ public class WikiDumpToolTest {
     public void testSampling() throws Exception {
         WikiDumpTool tool = new WikiDumpTool();
         
-        File outputDir = new File("build/test/WikiDumpToolTest/testSampling/");
+        File outputDir = new File("build/test/WikiDumpToolTest/testSampling/output/");
         outputDir.mkdirs();
-        FileUtils.cleanDirectory(outputDir);
+        
+        File metadataDir = new File("build/test/WikiDumpToolTest/testSampling/metadata/");
+        metadataDir.mkdirs();
         
         // Note that we get more redirect and file pages, since we're processing the entire
         // dataset while trying to get to 10 pages, with a sampling rate of 0.2f
-        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), 5, 10, false, 0.2f);
+        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), metadataDir.getAbsolutePath(), 5, 10, false, 0.2f);
         assertEquals(2, (int)counters.get(WikiDumpTool.MAIN_PAGE_COUNTER));
         assertEquals(25, (int)counters.get(WikiDumpTool.REDIRECT_PAGE_COUNTER));
         assertEquals(4, (int)counters.get(WikiDumpTool.FILE_PAGE_COUNTER));

@@ -59,11 +59,11 @@ public class WikiDumpTool {
         // TODO Auto-generated constructor stub
     }
     
-    public Map<String, Integer> run(String inputFilename, String outputDirname, int pagesPerFile, int numPages) throws IOException, SAXException {
-        return run(inputFilename, outputDirname, pagesPerFile, numPages, false, 1.0f);
+    public Map<String, Integer> run(String inputFilename, String outputDirname, String metadataDirname, int pagesPerFile, int numPages) throws IOException, SAXException {
+        return run(inputFilename, outputDirname, metadataDirname, pagesPerFile, numPages, false, 1.0f);
     }
     
-    public Map<String, Integer> run(String inputFilename, String outputDirname, int pagesPerFile, int numPages, boolean compressPartFiles, float samplePercent) throws IOException, SAXException {
+    public Map<String, Integer> run(String inputFilename, String outputDirname, String metadataDirname, int pagesPerFile, int numPages, boolean compressPartFiles, float samplePercent) throws IOException, SAXException {
         File outputDir = new File(outputDirname);
         if (!outputDir.exists()) {
             throw new InvalidParameterException("Output directory must exist: " + outputDir);
@@ -73,6 +73,15 @@ public class WikiDumpTool {
         
         FileUtils.cleanDirectory(outputDir);
         
+        File metadataDir = new File(metadataDirname);
+        if (!metadataDir.exists()) {
+            throw new InvalidParameterException("Metadata directory must exist: " + metadataDir);
+        } else if (!metadataDir.isDirectory()) {
+            throw new InvalidParameterException("Metadata directory can't be a file: " + metadataDir);
+        }
+
+        FileUtils.cleanDirectory(metadataDir);
+
         File inputFile = new File(inputFilename);
         if (!inputFile.exists()) {
             throw new InvalidParameterException("Input file must exist: " + inputFile);
@@ -88,15 +97,25 @@ public class WikiDumpTool {
         
         // Save off category hierarchy
         Map<String, Set<String>> categories = filter.getCategories();
-        File categoryFile = new File(outputDir, "categories.txt");
+        File categoryFile = new File(metadataDir, "categories.txt");
         categoryFile.delete();
         
+        // Note that we write out all entries, even if they don't have any parent category
         try (BufferedWriter bw = new BufferedWriter(new FileWriterWithEncoding(categoryFile, "UTF-8"))) {
             for (String childCategory: categories.keySet()) {
                 bw.write(childCategory);
                 bw.write('\t');
-                bw.write(categories.get(childCategory).toString());
-                bw.write('\r');
+                boolean firstParent = true;
+                for (String parentCategory : categories.get(childCategory)) {
+                    if (!firstParent) {
+                        bw.write('|');
+                    }
+                    
+                    firstParent = false;
+                    bw.write(parentCategory);
+                }
+                
+                bw.write('\n');
             }
             
             bw.flush();
@@ -106,7 +125,7 @@ public class WikiDumpTool {
         
         // Save off redirect info
         Map<String, String> redirects = filter.getRedirects();
-        File redirectFile = new File(outputDir, "redirects.txt");
+        File redirectFile = new File(metadataDir, "redirects.txt");
         redirectFile.delete();
         
         try (BufferedWriter bw = new BufferedWriter(new FileWriterWithEncoding(redirectFile, "UTF-8"))) {
@@ -114,7 +133,7 @@ public class WikiDumpTool {
                 bw.write(redirectFrom);
                 bw.write('\t');
                 bw.write(redirects.get(redirectFrom));
-                bw.write('\r');
+                bw.write('\n');
             }
             
             bw.flush();
@@ -143,7 +162,7 @@ public class WikiDumpTool {
             parser.parseArgument(args);
             
             WikiDumpTool tool = new WikiDumpTool();
-            Map<String, Integer> counters = tool.run(options.getInputFile(), options.getOutputDir(), options.getPagesPerFile(), options.getNumPages(), options.isCompressed(), options.getSamplePercent());
+            Map<String, Integer> counters = tool.run(options.getInputFile(), options.getOutputDir(), options.getMetadataDirname(), options.getPagesPerFile(), options.getNumPages(), options.isCompressed(), options.getSamplePercent());
             for (String counter : counters.keySet()) {
                 LOGGER.info(String.format("%s: %d", counter, counters.get(counter)));
             }
@@ -169,7 +188,7 @@ public class WikiDumpTool {
     protected static class WikiDumpFilter implements IArticleFilter, Closeable {
 
         private static Pattern CATEGORY_PATTERN = Pattern.compile("\\[\\[Category:(.+)\\]\\]", Pattern.CASE_INSENSITIVE);
-        private static Pattern REDIRECT_PATTERN = Pattern.compile("#REDIRECT:*[ \n]*\\[\\[(.+?)\\]\\]", Pattern.CASE_INSENSITIVE);
+        private static Pattern REDIRECT_PATTERN = Pattern.compile("#REDIRECT[ \t]*:*[ \n]*\\[\\[(.+?)\\]\\]", Pattern.CASE_INSENSITIVE);
 
         private boolean _compressPartFiles;
         private float _samplePercent;
@@ -385,6 +404,7 @@ public class WikiDumpTool {
         
         private String _inputFile;
         private String _outputDir;
+        private String _metadataDirname;
         private int _pagesPerFile = 100000;
         private int _numPages = Integer.MAX_VALUE;
         private float _samplePercent = 1.0f;
@@ -443,13 +463,22 @@ public class WikiDumpTool {
             return _inputFile;
         }
 
-        @Option(name = "-outputdir", usage = "path to directory for results", required = true)
+        @Option(name = "-outputdir", usage = "path to directory for part-xxx results", required = true)
         public void setOutputDir(String outputDir) {
             _outputDir = outputDir;
         }
 
         public String getOutputDir() {
             return _outputDir;
+        }
+
+        @Option(name = "-metadatadir", usage = "path to directory for metadata results", required = true)
+        public void setMetadataDirname(String metadataDirname) {
+            _metadataDirname = metadataDirname;
+        }
+
+        public String getMetadataDirname() {
+            return _metadataDirname;
         }
 
         @Override
