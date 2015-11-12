@@ -49,6 +49,7 @@ public class WikiDumpTool {
     public static final String CATEGORY_PAGE_COUNTER = "category-valid-page";
     public static final String CATEGORY_INVALID_PAGE_COUNTER = "category-invalid-page";
     public static final String MODULE_PAGE_COUNTER = "module-page";
+    public static final String DISAMBIGUATION_PAGE_COUNTER = "disambiguation-page";
     public static final String UNKNOWN_PAGE_COUNTER = "unknown-page";
     
     public static final String EXCEPTION_COUNTER = "exception";
@@ -179,7 +180,6 @@ public class WikiDumpTool {
         }
     }
 
-
     private static void printUsageAndExit(CmdLineParser parser) {
         parser.printUsage(System.err);
         System.exit(-1);
@@ -188,8 +188,46 @@ public class WikiDumpTool {
     protected static class WikiDumpFilter implements IArticleFilter, Closeable {
 
         private static Pattern CATEGORY_PATTERN = Pattern.compile("\\[\\[Category:(.+)\\]\\]", Pattern.CASE_INSENSITIVE);
-        private static Pattern REDIRECT_PATTERN = Pattern.compile("#REDIRECT[ \t]*:*[ \n]*\\[\\[(.+?)\\]\\]", Pattern.CASE_INSENSITIVE);
+        private static Pattern REDIRECT_PATTERN = Pattern.compile("#REDIRECT[ \t]*:*[ \n]*\\[\\[(.+?)(#.+?|)\\]\\]", Pattern.CASE_INSENSITIVE);
 
+        private static Pattern makeTemplatePattern(String templateName) {
+            return Pattern.compile("\\{\\{[ \t]*" + templateName + "[ \t]*(\\|.*|)\\}\\}", Pattern.CASE_INSENSITIVE);
+        }
+        
+        // List of templates found on https://en.wikipedia.org/wiki/Category:Disambiguation_message_boxes
+        // and described on https://en.wikipedia.org/wiki/Template:Disambiguation. This is a dynamic set,
+        // so unfortunately it can quickly become out of date.
+        
+        // FUTURE - process templates to find those triggering disambiguation (via usage of Dmbox template)
+        private static Pattern[] DISAMBIGUATION_PATTERNS = new Pattern[] {
+            // {{disambiguation|geo|ship}}
+            makeTemplatePattern("disambiguation"),
+            // {{disambig}}
+            makeTemplatePattern("disambig"),
+            // {{Disambig-Plants}}
+            makeTemplatePattern("disambig\\-[^ \t]+"),
+            // {{Disamb}}
+            makeTemplatePattern("disamb"),
+            // {{DAB}}
+            makeTemplatePattern("dab"),
+            // {{Disambiguation cleanup}}
+            makeTemplatePattern("disambiguation[ \t]+cleanup"),
+            // {{Airport disambiguation}}
+            makeTemplatePattern("[^ \t]+[ \t]+disambiguation"),
+            // {{Numberdis}}
+            makeTemplatePattern("numberdis"),
+            // {{Letter-NumberCombDisambig}}
+            makeTemplatePattern("Letter\\-NumberCombDisambig"),
+            // {{Hndis}}
+            makeTemplatePattern("hndis"),
+            // {{Hndis-cleanup}}
+            makeTemplatePattern("hndis\\-cleanup"),
+            // {{Geodis}}
+            makeTemplatePattern("geodis"),
+            // {{Mil-unit-dis}}
+            makeTemplatePattern("Mil\\-unit\\-dis"),
+        };
+        
         private boolean _compressPartFiles;
         private float _samplePercent;
         private File _outputDir;
@@ -231,15 +269,17 @@ public class WikiDumpTool {
                 return;
             }
             
+            String title = article.getTitle();
+            String text = article.getText();
+
             // See if we want to save the article.
             if (article.isCategory()) {
-                String title = article.getTitle();
                 if (!title.startsWith("Category:")) {
                     LOGGER.error("Invalid category page title: " + title);
                     incrementCounter(CATEGORY_INVALID_PAGE_COUNTER);
                 } else {
                     String categoryName = title.substring("Category:".length());
-                    Set<String> parentCategories = getParentCategories(article.getText());
+                    Set<String> parentCategories = getParentCategories(text);
                     _categories.put(categoryName, parentCategories);
                     incrementCounter(CATEGORY_PAGE_COUNTER);
                 }
@@ -255,14 +295,22 @@ public class WikiDumpTool {
                 incrementCounter(UNKNOWN_PAGE_COUNTER);
             } else if (article.isRedirect()) {
                 // Redirect is a main page with an extra flag.
-                String redirectArticle = getRedirect(article.getText());
+                String redirectArticle = getRedirect(text);
                 if (redirectArticle != null) {
-                    _redirects.put(article.getTitle().replaceAll(" ",  "_"), redirectArticle);
+                    _redirects.put(title.replaceAll(" ",  "_"), redirectArticle);
                     incrementCounter(REDIRECT_PAGE_COUNTER);
                 } else {
-                    LOGGER.warn(String.format("Redirect article without #REDIRECT directive on page %s: %s", article.getTitle(), article.getText()));
+                    LOGGER.warn(String.format("Redirect article without #REDIRECT directive on page %s: %s", title, text));
                     incrementCounter(REDIRECT_INVALID_PAGE_COUNTER);
                 }
+            } else if (title.contains("(disambiguation)")) {
+                if (!isDisambiguation(text)) {
+                    LOGGER.warn(String.format("Disambiguation article without disambiguation template on page %s: %s", title, text));
+                }
+                
+                incrementCounter(DISAMBIGUATION_PAGE_COUNTER);
+            } else if (isDisambiguation(text)) {
+                incrementCounter(DISAMBIGUATION_PAGE_COUNTER);
             } else {
                 if (_samplePercent != 1.0f) {
                     // If the percent was 1.0, we should always process it.
@@ -281,9 +329,9 @@ public class WikiDumpTool {
                     }
 
                     // Write out this page, and increment counts.
-                    _writer.append(cleanText(article.getTitle()));
+                    _writer.append(cleanText(title));
                     _writer.append('\t');
-                    _writer.append(encodeText(article.getText()));
+                    _writer.append(encodeText(text));
                     _writer.append('\n');
 
                     _curPage += 1;
@@ -303,6 +351,16 @@ public class WikiDumpTool {
             } else {
                 return null;
             }
+        }
+
+        protected boolean isDisambiguation(String text) {
+            for (Pattern p : DISAMBIGUATION_PATTERNS) {
+                Matcher m = p.matcher(text);
+                if (m.find()) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /**

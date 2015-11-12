@@ -84,6 +84,43 @@ public class WikiDumpToolTest {
         assertEquals("Taif_Agreement", filter.getRedirect("#REDIRECT\n\n[[Taif Agreement]]"));
         assertEquals("Beşiktaş_J.K.", filter.getRedirect("\n\n#REDIRECT: [[Beşiktaş J.K.]]"));
         assertEquals("How_I_Met_Your_Mother", filter.getRedirect("#redirect : [[How I Met Your Mother]]"));
+        assertEquals("Blah", filter.getRedirect("#redirect [[Blah# Anchor]]"));
+        filter.close();
+    }
+    
+    @Test
+    public void testDisambiguationHandling() throws Exception {
+        File outputDir = new File("build/test/WikiDumpToolTest/testDisambiguationHandling");
+        outputDir.mkdirs();
+        
+        WikiDumpFilter filter = new WikiDumpFilter(outputDir, 1, 1, false, 1.0f);
+        assertTrue(filter.isDisambiguation("{{disambiguation}}"));
+        assertTrue(filter.isDisambiguation("blah {{disambiguation}}"));
+        assertTrue(filter.isDisambiguation("{{ disambiguation }}"));
+        
+        assertTrue(filter.isDisambiguation("blah {{Disambiguation}} blah"));
+        assertTrue(filter.isDisambiguation("{{disambiguation|geo|ship}}"));
+        assertTrue(filter.isDisambiguation("{{disambiguation |geo|ship}}"));
+        
+        assertTrue(filter.isDisambiguation("{{disambig}}"));
+        assertTrue(filter.isDisambiguation("{{disambig|xx}}"));
+        assertTrue(filter.isDisambiguation("{{Dab}}"));
+        assertTrue(filter.isDisambiguation("{{DAB}}"));
+        assertTrue(filter.isDisambiguation("{{Disamb}}"));
+        
+        assertTrue(filter.isDisambiguation("{{Disambiguation cleanup}}"));
+        assertTrue(filter.isDisambiguation("{{Airport disambiguation}}"));
+        assertTrue(filter.isDisambiguation("{{Numberdis}}"));
+        assertTrue(filter.isDisambiguation("{{Letter-NumberCombDisambig}}"));
+        assertTrue(filter.isDisambiguation("{{Hndis}}"));
+        assertTrue(filter.isDisambiguation("{{Hndis-cleanup}}"));
+        assertTrue(filter.isDisambiguation("{{Geodis}}"));
+        assertTrue(filter.isDisambiguation("{{Disambig-Plants}}"));
+        assertTrue(filter.isDisambiguation("{{Mil-unit-dis}}"));
+
+        assertFalse(filter.isDisambiguation("{{disambiguation needed|date=June 2012}}"));
+        assertFalse(filter.isDisambiguation("disambiguation"));
+        
         filter.close();
     }
     
