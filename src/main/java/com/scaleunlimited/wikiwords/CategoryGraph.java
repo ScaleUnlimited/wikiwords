@@ -49,6 +49,18 @@ public class CategoryGraph implements Writable, Iterable<Category> {
         }
     }
 
+    public Set<Category> findHeads() {
+        // Heads are categories with no parents.
+        Set<Category> result = new HashSet<>();
+        for (Category category : _categories) {
+            if (!category.hasParents()) {
+                result.add(category);
+            }
+        }
+        
+        return result;
+    }
+    
     public Set<Category> findTails() {
         unmarkAll();
         
@@ -87,6 +99,11 @@ public class CategoryGraph implements Writable, Iterable<Category> {
     public int breakCycles() {
         int numCycles = 0;
         unmarkAll();
+        
+        // TODO would we get better results (less arbitrary breakage) by first
+        // starting at heads, and then doing the scan of remaining categories
+        // that have parents. But we'd need to build an inverted graph (with
+        // children, vs. parents).
         
         for (Category category : _categories) {
             if (category.hasParents()) {

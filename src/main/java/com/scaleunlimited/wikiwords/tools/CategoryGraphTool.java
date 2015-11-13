@@ -26,7 +26,6 @@ public class CategoryGraphTool {
     private static final Logger LOGGER = Logger.getLogger(CategoryGraphTool.class);
 
     public CategoryGraphTool() {
-        // TODO Auto-generated constructor stub
     }
 
     public void run(CategoryGraphOptions options) throws IOException {
@@ -35,8 +34,10 @@ public class CategoryGraphTool {
         //
         //  <category name> <tab> <parent category> | <parent category> ...
         //
+        // Category names are in the xxx_yyy format (Nevada_County).
+        //
         // There are 0...n parent categories. There can also be cyclic loops
-        // in the resulting graph.
+        // in the resulting graph, which we break at arbitrary locations.
         
         Map<Category, String> categoriesWithParents = new HashMap<>();
         CategoryGraph graph = new CategoryGraph();

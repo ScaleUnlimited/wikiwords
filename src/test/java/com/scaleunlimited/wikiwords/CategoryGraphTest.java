@@ -33,6 +33,11 @@ public class CategoryGraphTest {
         assertEquals(2, terminals.size());
         assertTrue(terminals.contains(new Category("cat1", null)));
         assertTrue(terminals.contains(new Category("cat3", null)));
+        
+        Set<Category> heads = graph.findHeads();
+        assertEquals(2, heads.size());
+        assertTrue(heads.contains(new Category("cat1", null)));
+        assertTrue(heads.contains(new Category("cat2", null)));
     }
 
     @Test
