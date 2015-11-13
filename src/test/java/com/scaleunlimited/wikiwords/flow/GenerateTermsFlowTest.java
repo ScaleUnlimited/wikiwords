@@ -45,7 +45,7 @@ public class GenerateTermsFlowTest {
         // Verify we got the expected number of results.
         Map<String, Long> counters = options.getCounters(GenerateTermsFlow.class);
         String counterName = WorkflowOptions.getFlowCounterName(WikiwordsCounters.ARTICLES);
-        assertEquals(18, (long)counters.get(counterName));
+        assertEquals(15, (long)counters.get(counterName));
     }
 
     protected static GenerateTermsOptions generateTerms(String testDirname) throws Exception {
