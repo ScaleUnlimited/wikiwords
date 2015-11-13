@@ -51,6 +51,7 @@ public class WikiDumpTool {
     public static final String MODULE_PAGE_COUNTER = "module-page";
     public static final String DISAMBIGUATION_PAGE_COUNTER = "disambiguation-page";
     public static final String UNKNOWN_PAGE_COUNTER = "unknown-page";
+    public static final String OTHER_PAGE_COUNTER = "other-page";
     
     public static final String EXCEPTION_COUNTER = "exception";
     
@@ -142,6 +143,22 @@ public class WikiDumpTool {
             LOGGER.error("Exception saving redirect info", e);
         }
 
+        // Save of disambiguation articles
+        Set<String> disambigs = filter.getDisambigs();
+        File disambigsFile = new File(metadataDir, "disambigs.txt");
+        disambigsFile.delete();
+        
+        try (BufferedWriter bw = new BufferedWriter(new FileWriterWithEncoding(disambigsFile, "UTF-8"))) {
+            for (String disambig: disambigs) {
+                bw.write(disambig);
+                bw.write('\n');
+            }
+            
+            bw.flush();
+        } catch (Exception e) {
+            LOGGER.error("Exception saving disambiguation info", e);
+        }
+
         _exceptions = filter.getExceptions();
         
         return filter.getCounters();
@@ -187,7 +204,7 @@ public class WikiDumpTool {
 
     protected static class WikiDumpFilter implements IArticleFilter, Closeable {
 
-        private static Pattern CATEGORY_PATTERN = Pattern.compile("\\[\\[Category:(.+)\\]\\]", Pattern.CASE_INSENSITIVE);
+        private static Pattern CATEGORY_PATTERN = Pattern.compile("\\[\\[Category:(.+?)\\]\\]", Pattern.CASE_INSENSITIVE);
         private static Pattern REDIRECT_PATTERN = Pattern.compile("#REDIRECT[ \t]*:*[ \n]*\\[\\[(.+?)(#.+?|)\\]\\]", Pattern.CASE_INSENSITIVE);
 
         private static Pattern makeTemplatePattern(String templateName) {
@@ -241,6 +258,7 @@ public class WikiDumpTool {
         private Map<String, Integer> _counters;
         private Map<String, Set<String>> _categories;
         private Map<String, String> _redirects;
+        private Set<String> _disambigs;
         
         private Random _rand;
         
@@ -257,6 +275,7 @@ public class WikiDumpTool {
             _counters = new HashMap<>();
             _categories = new HashMap<String, Set<String>>();
             _redirects = new HashMap<>();
+            _disambigs = new HashSet<>();
             
             _writer = makePartFileWriter();
             
@@ -278,7 +297,7 @@ public class WikiDumpTool {
                     LOGGER.error("Invalid category page title: " + title);
                     incrementCounter(CATEGORY_INVALID_PAGE_COUNTER);
                 } else {
-                    String categoryName = title.substring("Category:".length());
+                    String categoryName = convertTitleToArticle(title.substring("Category:".length()));
                     Set<String> parentCategories = getParentCategories(text);
                     _categories.put(categoryName, parentCategories);
                     incrementCounter(CATEGORY_PAGE_COUNTER);
@@ -291,25 +310,30 @@ public class WikiDumpTool {
                 incrementCounter(PROJECT_PAGE_COUNTER);
             } else if (article.isModule()) {
                 incrementCounter(MODULE_PAGE_COUNTER);
-            } else if (!article.isMain()) {
+            } else if (article.isUnknown()) {
+                LOGGER.warn(String.format("Unknown article type for page %s", title));
                 incrementCounter(UNKNOWN_PAGE_COUNTER);
             } else if (article.isRedirect()) {
                 // Redirect is a main page with an extra flag.
                 String redirectArticle = getRedirect(text);
                 if (redirectArticle != null) {
-                    _redirects.put(title.replaceAll(" ",  "_"), redirectArticle);
+                    _redirects.put(convertTitleToArticle(title), redirectArticle);
                     incrementCounter(REDIRECT_PAGE_COUNTER);
                 } else {
                     LOGGER.warn(String.format("Redirect article without #REDIRECT directive on page %s: %s", title, text));
                     incrementCounter(REDIRECT_INVALID_PAGE_COUNTER);
                 }
+            } else if (!article.isMain()) {
+                incrementCounter(OTHER_PAGE_COUNTER);
             } else if (title.contains("(disambiguation)")) {
                 if (!isDisambiguation(text)) {
                     LOGGER.warn(String.format("Disambiguation article without disambiguation template on page %s: %s", title, text));
                 }
                 
+                _disambigs.add(convertTitleToArticle(title));
                 incrementCounter(DISAMBIGUATION_PAGE_COUNTER);
             } else if (isDisambiguation(text)) {
+                _disambigs.add(convertTitleToArticle(title));
                 incrementCounter(DISAMBIGUATION_PAGE_COUNTER);
             } else {
                 if (_samplePercent != 1.0f) {
@@ -344,6 +368,10 @@ public class WikiDumpTool {
             }
         }
 
+        private String convertTitleToArticle(String title) {
+            return title.replaceAll(" ",  "_");
+        }
+
         protected String getRedirect(String text) {
             Matcher m = REDIRECT_PATTERN.matcher(text);
             if (m.find()) {
@@ -371,7 +399,7 @@ public class WikiDumpTool {
          * @param text MediaWiki markup text from a page.
          * @return Set of parent category names.
          */
-        private Set<String> getParentCategories(String text) {
+        protected Set<String> getParentCategories(String text) {
             Matcher m = CATEGORY_PATTERN.matcher(text);
 
             Set<String> parentCategories = new HashSet<>();
@@ -380,7 +408,8 @@ public class WikiDumpTool {
                 if (parentCategory.indexOf('|') != -1) {
                     parentCategory = parentCategory.substring(0, parentCategory.indexOf('|'));
                 }
-                parentCategories.add(parentCategory);
+                
+                parentCategories.add(convertTitleToArticle(parentCategory));
             }
             
             return parentCategories;
@@ -435,6 +464,10 @@ public class WikiDumpTool {
         
         public Map<String, String> getRedirects() {
             return _redirects;
+        }
+        
+        public Set<String> getDisambigs() {
+            return _disambigs;
         }
         
         private void addException(IOException e) {
