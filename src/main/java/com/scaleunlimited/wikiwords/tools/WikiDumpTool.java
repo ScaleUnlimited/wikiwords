@@ -297,9 +297,13 @@ public class WikiDumpTool {
                     LOGGER.error("Invalid category page title: " + title);
                     incrementCounter(CATEGORY_INVALID_PAGE_COUNTER);
                 } else {
-                    String categoryName = convertTitleToArticle(title.substring("Category:".length()));
                     Set<String> parentCategories = getParentCategories(text);
-                    _categories.put(categoryName, parentCategories);
+                    if (!parentCategories.isEmpty()) {
+                        // Only save this off if we have parent categories.
+                        String categoryName = convertTitleToArticle(title.substring("Category:".length()));
+                        _categories.put(categoryName, parentCategories);
+                    }
+                    
                     incrementCounter(CATEGORY_PAGE_COUNTER);
                 }
             } else if (article.isFile()) {

@@ -69,9 +69,9 @@ public class WikiDumpToolTest {
         lines = IOUtils.readLines(new FileReader(new File(metadataDir, "disambigs.txt")));
         assertEquals(3, lines.size());
         
-        // Verify we got a categories file with 2 entries
+        // Verify we got a categories file with 1 entry
         lines = IOUtils.readLines(new FileReader(new File(metadataDir, "categories.txt")));
-        assertEquals(2, lines.size());
+        assertEquals(1, lines.size());
     }
 
     @Test
