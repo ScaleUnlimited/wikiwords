@@ -33,3 +33,16 @@ A typical invocation looks like:
 This command assumes that you've got the results of the `WikiDumpTool` uploaded to the `su-wikidump` bucket in Amazon's S3, adn that you've previously created a `/working` directory in HDFS.
 
 Using a very small EMR cluster of 2 m3.xlarge slaves, it took 1 hour for the above command to process a full English Wikipedia dump (4.7 million pages), and it generated 1.2 billion term/article associations.
+
+The syslog output file in EMR will end with a line like this:
+
+`Articles processed: 4744786`
+
+This is needed for input to the AnalyzeTermsTool
+
+AnalyzeTermsTool
+----------------
+
+This tool takes the output of the `GenerateTermsTool`, and calculates the "best" topics (associated Wikipedia articles) for each unique word. By default this is limited to the top 20 articles for any given term.
+
+The score for each term/article association is besed on the term frequency (TF), which is what percentage of all terms that were close enough to a given article link are this term, and inverse document frequency (IDF), which is the invervse of what percentage of all article links had this term as one of its "close terms". We actually use the Lucene TF*IDF scoring formula, which is `sqrt(TF) * (1 + log(total unique article links/(unique article links close to this term + 1))`
