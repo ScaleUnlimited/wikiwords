@@ -1,5 +1,7 @@
 package com.scaleunlimited.wikiwords.tools;
 
+import java.util.Map;
+
 import org.apache.log4j.Logger;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -12,13 +14,15 @@ import com.scaleunlimited.cascading.BaseTool;
 import com.scaleunlimited.cascading.FlowResult;
 import com.scaleunlimited.cascading.FlowRunner;
 import com.scaleunlimited.cascading.FlowUtils;
+import com.scaleunlimited.wikiwords.WikiwordsCounters;
 import com.scaleunlimited.wikiwords.WorkflowOptions;
+import com.scaleunlimited.wikiwords.WorkingConfig;
 import com.scaleunlimited.wikiwords.flow.GenerateTermsFlow;
 
 public class GenerateTermsTool extends BaseTool {
     private static final Logger LOGGER = Logger.getLogger(GenerateTermsTool.class);
 
-    private void run(GenerateTermsOptions options) throws Exception {
+    private Map<String, Long> run(GenerateTermsOptions options) throws Exception {
         Flow flow = GenerateTermsFlow.createFlow(options);
 
         if (options.getDOTFile() != null) {
@@ -29,6 +33,7 @@ public class GenerateTermsTool extends BaseTool {
         FlowUtils.nameFlowSteps(flow);
         FlowResult fr = FlowRunner.run(flow);
         options.saveCounters(GenerateTermsFlow.class, fr.getCounters());
+        return fr.getCounters();
     }
 
     public static void main(String[] args) {
@@ -45,7 +50,13 @@ public class GenerateTermsTool extends BaseTool {
         GenerateTermsTool tool = new GenerateTermsTool();
         
         try {
-            tool.run(options);
+            Map<String, Long> counters = tool.run(options);
+            Long numArticles = counters.get(WorkflowOptions.getFlowCounterName(WikiwordsCounters.ARTICLES));
+            if (numArticles == null) {
+                LOGGER.error("No articles processed!");
+            } else {
+                LOGGER.info("Articles processed: " + numArticles);
+            }
         } catch (PlannerException e) {
             e.writeDOT("build/failed-flow.dot");
             System.err.println("PlannerException: " + e.getMessage());

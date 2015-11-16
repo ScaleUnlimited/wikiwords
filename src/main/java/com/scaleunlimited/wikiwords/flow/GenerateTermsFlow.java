@@ -9,6 +9,7 @@ import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.text.BreakIterator;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,10 +56,10 @@ import com.scaleunlimited.wikiwords.tools.GenerateTermsTool.GenerateTermsOptions
 public class GenerateTermsFlow {
     private static final Logger LOGGER = Logger.getLogger(GenerateTermsFlow.class);
 
-    private final static String ARTICLE_NAME_FN = "article_name";
-    private final static String ARTICLE_TEXT_FN = "article_text";
+    protected final static String ARTICLE_NAME_FN = "article_name";
+    protected final static String ARTICLE_TEXT_FN = "article_text";
     
-    private final static Fields ARTICLE_FIELDS = new Fields(ARTICLE_NAME_FN, ARTICLE_TEXT_FN);
+    protected final static Fields ARTICLE_FIELDS = new Fields(ARTICLE_NAME_FN, ARTICLE_TEXT_FN);
 
     public static Flow createFlow(GenerateTermsOptions options) throws Exception {
         
@@ -132,7 +133,7 @@ public class GenerateTermsFlow {
      *
      */
     @SuppressWarnings("serial")
-    private static class ConvertToTerms extends BaseOperation<Void> implements Function<Void> {
+    public static class ConvertToTerms extends BaseOperation<Void> implements Function<Void> {
 
         // Search for {{ or }}, across lines.
         private static Pattern TEMPLATE_PATTERN = Pattern.compile("(\\{\\{|\\}\\})", Pattern.DOTALL);
@@ -208,7 +209,7 @@ public class GenerateTermsFlow {
                     continue;
                 } else if (curDepth == 0) {
                     // We got an ending }} but we're not nested - ignore it.
-                    LOGGER.warn("Invalid template nesting at offset " + m.start());
+                    LOGGER.warn(String.format("Article %s has invalid template nesting at offset %d", title, m.start()));
                     continue;
                 } else {
                     curDepth--;
@@ -258,16 +259,47 @@ public class GenerateTermsFlow {
                 _htmlParser.parse(is);
                 _flowProcess.increment(WikiwordsCounters.HTML_PARSE, 1);
                 
-                List<String> terms = _handler.getTerms();
                 _result.setArticle(title);
-                for (ArticleLinkPosition articleLink : _handler.getArticleLinks()) {
-                    _result.setArticleRef(articleLink.getArticle());
-                    for (int i = Math.max(0, articleLink.getLinkPosition() - _maxDistanceToLink); i < Math.min(articleLink.getLinkPosition() + _maxDistanceToLink, terms.size()); i++) {
+
+                List<String> terms = _handler.getTerms();
+                List<ArticleLinkPosition> links = _handler.getArticleLinks();
+                
+                ArticleLinkPosition linkPos = new ArticleLinkPosition("", 0);
+                for (int i = 0; i < terms.size(); i++) {
+                    // Find the closest link that's at or after position <i>
+                    linkPos.setLinkPosition(i);
+                    int linkIndex = Collections.binarySearch(links, linkPos);
+                    // Calc distance from term to this article, then calc
+                    // position to the previous article.
+                    if (linkIndex < 0) {
+                        linkIndex = -1 - linkIndex;
+                    }
+                    
+                    int bestLinkIndex = -1;
+                    int followingDistance = Integer.MAX_VALUE;
+                    if (linkIndex < links.size()) {
+                        followingDistance = links.get(linkIndex).getLinkPosition() - i;
+                        if (followingDistance <= _maxDistanceToLink) {
+                            bestLinkIndex = linkIndex;
+                        }
+                    }
+                    
+                    int previousDistance = Integer.MAX_VALUE;
+                    if (linkIndex > 0) {
+                        ArticleLinkPosition prevLink = links.get(linkIndex - 1);
+                        previousDistance = Math.max(0, i - (prevLink.getLinkPosition() + prevLink.getNumTerms() - 1));
+                        if ((previousDistance <= _maxDistanceToLink) && (previousDistance < followingDistance)) {
+                            bestLinkIndex = linkIndex - 1;
+                        }
+                    }
+                    
+                    if (bestLinkIndex != -1) {
+                        _result.setArticleRef(links.get(bestLinkIndex).getArticleName());
                         _result.setTerm(terms.get(i));
-                        _result.setDistance(i - articleLink.getLinkPosition());
+                        _result.setDistance(Math.min(followingDistance, previousDistance));
                         functionCall.getOutputCollector().add(_result.getTupleEntry());
                         _flowProcess.increment(WikiwordsCounters.WIKITERM, 1);
-                    }
+                   }
                 }
             } catch (Exception e) {
                 LOGGER.error("Exception parsing HTML for " + title, e);
@@ -330,6 +362,7 @@ public class GenerateTermsFlow {
         private StringBuffer _anchorText;
         private List<String> _terms;
         private List<ArticleLinkPosition> _articleLinks;
+        private int _curLinkIndex = -1;
         
         public MyHTMLHandler() {
         }
@@ -358,10 +391,13 @@ public class GenerateTermsFlow {
             super.startElement(uri, localName, qName, attributes);
             _path.pushNode(qName);
             
-            if (_path.atNode("head/title")) {
+            if (_path.atNode("/html/head/title")) {
+                _elementText.setLength(0);
+            } else if (_path.atNode("/html/body")) {
                 _elementText.setLength(0);
             } else if (_path.atNode("a")) {
                 _anchorText.setLength(0);
+                _curLinkIndex = -1;
                 
                 // Flush out terms from preceeding text.
                 addTermsFromElementText();
@@ -370,17 +406,19 @@ public class GenerateTermsFlow {
                 String url = attributes.getValue("href");
                 if (url != null) {
                     try {
-                        url = URLDecoder.decode(url, "UTF-8");
-                        
                         // Screen out /File:xxx and /<lang>:xxx links
                         if (url.startsWith("/") && (url.indexOf(':') == -1)) {
+                            url = URLDecoder.decode(url, "UTF-8");
+                            
+                            // Create the article link position - but we don't know the actual text yet.
                             int endIndex = url.indexOf('#') == -1 ? url.length() : url.indexOf('#');
                             _articleLinks.add(new ArticleLinkPosition(url.substring(1, endIndex), _terms.size()));
+                            _curLinkIndex = _articleLinks.size() - 1;
                         }
                    } catch (UnsupportedEncodingException e) {
                        throw new RuntimeException("Impossible encoding exception", e);
                     } catch (IllegalArgumentException e) {
-                        LOGGER.warn("Invalid URL hex sequence in " + url, e);
+                        LOGGER.debug("Invalid URL hex sequence in " + url, e);
                     }
                 }
                 
@@ -391,26 +429,44 @@ public class GenerateTermsFlow {
             
         }
         
-        private void addTermsFromElementText() {
+        private List<String> getTermsFromText(String text) {
             // TODO use real parser. Make it something we pass in.
             BreakIterator iter = BreakIterator.getWordInstance();
-            String text = _elementText.toString();
             iter.setText(text);
             
+            List<String> result = new ArrayList<>();
             int start = iter.first();
             for (int end = iter.next(); end != BreakIterator.DONE; start = end, end = iter.next()) {
-                 addTerm(text.substring(start, end));
+                addTermIfValid(text.substring(start, end), result);
             }
-            
+
+            return result;
+        }
+        
+        private void addTermsFromElementText() {
+            addTerms(getTermsFromText(_elementText.toString()));
             _elementText.setLength(0);
         }
 
+        private boolean addTerms(List<String> terms) {
+            boolean result = false;
+            for (String term : terms) {
+                result |= addTerm(term);
+            }
+            
+            return result;
+        }
+        
         private boolean addTerm(String term) {
+            return addTermIfValid(term, _terms);
+        }
+
+        private boolean addTermIfValid(String term, List<String> list) {
             term = term.toLowerCase();
             term = StringUtils.strip(term);
             term = StringUtils.strip(term, "[](),?!;:.'\"");
             if (!term.isEmpty() && Character.isLetter(term.charAt(0))) {
-                _terms.add(term);
+                list.add(term);
                 return true;
             } else {
                 return false;
@@ -420,10 +476,17 @@ public class GenerateTermsFlow {
         @Override
         public void endElement(String uri, String localName, String qName) throws SAXException {
             if (_path.atNode("head/title")) {
-               addTerm(_elementText.toString());
-               _elementText.setLength(0);
+               // addTerm(_elementText.toString());
+               // _elementText.setLength(0);
             } else  if (_path.atNode("a")) {
-                addTerm(_anchorText.toString());
+                if (_curLinkIndex != -1) {
+                    List<String> anchorTerms = getTermsFromText(_anchorText.toString());
+                    addTerms(anchorTerms);
+
+                    // Set the size of the anchor text (term count) for the current (last) article link.
+                    _articleLinks.get(_curLinkIndex).setNumTerms(anchorTerms.size());
+                    _curLinkIndex = -1;
+                }
             }
             
             _path.popNode(qName);
@@ -451,21 +514,53 @@ public class GenerateTermsFlow {
         }
     }
     
-    private static class ArticleLinkPosition {
-        private String _article;
+    private static class ArticleLinkPosition implements Comparable<ArticleLinkPosition> {
+        private String _articleName;
         private int _linkPosition;
+        private int _numTerms;
         
-        public ArticleLinkPosition(String article, int linkPosition) {
-            _article = article;
+        public ArticleLinkPosition(String articleName, int linkPosition) {
+            _articleName = articleName;
             _linkPosition = linkPosition;
+            _numTerms = 0;
         }
 
-        public String getArticle() {
-            return _article;
+
+        public ArticleLinkPosition(String articleName, int linkPosition, int numTerms) {
+            _articleName = articleName;
+            _linkPosition = linkPosition;
+            _numTerms = numTerms;
         }
 
+        public String getArticleName() {
+            return _articleName;
+        }
+        
         public int getLinkPosition() {
             return _linkPosition;
+        }
+
+        public void setLinkPosition(int linkPosition) {
+            _linkPosition = linkPosition;
+        }
+        
+        public int getNumTerms() {
+            return _numTerms;
+        }
+        
+        public void setNumTerms(int numTerms) {
+            _numTerms = numTerms;
+        }
+        
+        @Override
+        public int compareTo(ArticleLinkPosition o) {
+            if (_linkPosition < o._linkPosition) {
+                return -1;
+            } else if (_linkPosition > o._linkPosition) {
+                return 1;
+            } else {
+                return 0;
+            }
         }
     }
 
