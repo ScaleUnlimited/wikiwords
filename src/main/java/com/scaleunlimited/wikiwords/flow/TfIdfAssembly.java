@@ -90,6 +90,7 @@ public class TfIdfAssembly extends SubAssembly {
         // Output is DOC_FN, TERM_FN, TF_FN
         
         // Now for each term we need an IDF (inverse doc frequency).
+        // TODO split this off of termCountPerDocPipe after first SumBy, as that already has unique term/doc results.
         Pipe docCountPerTermPipe = new Pipe("doc count per term pipe", termsPipe);
         docCountPerTermPipe = new Retain(docCountPerTermPipe, new Fields(DOC_FN, TERM_FN));
         docCountPerTermPipe = new Unique(docCountPerTermPipe, new Fields(DOC_FN, TERM_FN));
@@ -108,7 +109,10 @@ public class TfIdfAssembly extends SubAssembly {
         // Output is TERM_FN, DOC_COUNT_PER_TERM_FN
         
         // We can calculate the actual IDF, equal to 1 + log(total docs/(term docs + 1))
-        Pipe idfPipe = new HashJoin(docCountPerTermPipe, Fields.NONE, totalDocCountPipe, Fields.NONE);
+        // Pipe idfPipe = new HashJoin(docCountPerTermPipe, Fields.NONE, totalDocCountPipe, Fields.NONE);
+        Pipe idfPipe = new CoGroup(docCountPerTermPipe, Fields.NONE, totalDocCountPipe, Fields.NONE);
+
+        
         idfPipe = new Each(idfPipe, new Fields(TOTAL_DOC_COUNT_FN, DOC_COUNT_PER_TERM_FN), new ExpressionFunction(new Fields(IDF_FN), "1 + Math.log((double)$0/($1 + 1))", Float.class), Fields.SWAP);
         idfPipe = new Rename(idfPipe, new Fields(TERM_FN), new Fields(TEMP_TERM_FN));
         // Output is TEMP_TERM_FN, IDF_FN
