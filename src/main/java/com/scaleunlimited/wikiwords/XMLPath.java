@@ -50,6 +50,10 @@ public class XMLPath {
     }
     
     private String[] getNodeNames(String nodePath) {
+        if (nodePath.contains("//")) {
+            throw new IllegalArgumentException("Path cannot contain empty node names, but got " + nodePath);
+        }
+        
         if (nodePath.startsWith("/")) {
             nodePath = nodePath.substring(1);
         }

@@ -44,9 +44,27 @@ public class XMLPathTest {
         assertTrue(path.inNode("one/"));
         
         assertFalse(path.atNode("/one/two"));
+        assertFalse(path.inNode("/one/two"));
         
-        // Ignore slash at end
+        path.pushNode("two");
+        // path is now "/one/two"
+        assertFalse(path.atNode("/one"));
+        assertFalse(path.atNode("/one/"));
+        assertFalse(path.atNode("one"));
+        assertFalse(path.atNode("one/"));
         
+        assertTrue(path.inNode("/one"));
+        assertTrue(path.inNode("/one/"));
+        assertTrue(path.inNode("one"));
+        assertTrue(path.inNode("one/"));
+        
+        assertTrue(path.atNode("/one/two"));
+        assertTrue(path.atNode("/one/two/"));
+        assertTrue(path.inNode("/one/two"));
+        assertTrue(path.inNode("/one/two/"));
+        assertTrue(path.inNode("two"));
+        assertTrue(path.inNode("two/"));
+
         // Don't allow an empty path element.
         try {
             path.atNode("");
