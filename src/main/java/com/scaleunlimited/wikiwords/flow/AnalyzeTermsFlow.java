@@ -49,6 +49,7 @@ public class AnalyzeTermsFlow {
         flowDef.addSource(p, sourceTap);
         
         // Calculate the DF for each term.
+        /*
         Pipe termDF = new Pipe("term DF", p);
         termDF = new Retain(termDF, new Fields(WikiTermDatum.TERM_FN, WikiTermDatum.ARTICLE_NAME_FN));
         termDF = new Unique(termDF, new Fields(WikiTermDatum.TERM_FN, WikiTermDatum.ARTICLE_NAME_FN));
@@ -59,6 +60,7 @@ public class AnalyzeTermsFlow {
         termDF = new Each(termDF, new Fields("num_articles"), new ExpressionFunction(new Fields("df"), "(float)num_articles / " + options.getTotalArticles(), Float.class), Fields.SWAP);
         Tap termDFSink = platform.makeTap(platform.makeTextScheme(), options.getWorkingSubdirPath(WorkingConfig.TERMDF_SUBDIR_NAME), SinkMode.REPLACE);
         flowDef.addTailSink(termDF, termDFSink);
+        */
         
         // Calculate the TF*IDF value for term/article ref pairs.
         Pipe termTFIDF = new Pipe("term TF*IDF pipe", p);
