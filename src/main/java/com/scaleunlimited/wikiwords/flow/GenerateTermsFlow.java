@@ -61,6 +61,9 @@ public class GenerateTermsFlow {
     
     protected final static Fields ARTICLE_FIELDS = new Fields(ARTICLE_NAME_FN, ARTICLE_TEXT_FN);
 
+    protected static final String STRIPPED_TERM = "_";
+
+
     public static Flow createFlow(GenerateTermsOptions options) throws Exception {
         
         // We're reading in text files, which we have to run through an HTML generator.
@@ -266,6 +269,11 @@ public class GenerateTermsFlow {
                 
                 ArticleLinkPosition linkPos = new ArticleLinkPosition("", 0);
                 for (int i = 0; i < terms.size(); i++) {
+                    // Ignore terms that we've decided to strip.
+                    if (terms.get(i).equals(STRIPPED_TERM)) {
+                        continue;
+                    }
+                    
                     // Find the closest link that's at or after position <i>
                     linkPos.setLinkPosition(i);
                     int linkIndex = Collections.binarySearch(links, linkPos);
@@ -465,10 +473,15 @@ public class GenerateTermsFlow {
             term = term.toLowerCase();
             term = StringUtils.strip(term);
             term = StringUtils.strip(term, "[](),?!;:.'\"");
-            if (!term.isEmpty() && Character.isLetter(term.charAt(0))) {
+            if (term.isEmpty()) {
+                return false;
+            }
+            
+            if (Character.isLetter(term.charAt(0))) {
                 list.add(term);
                 return true;
             } else {
+                list.add(STRIPPED_TERM);
                 return false;
             }
         }

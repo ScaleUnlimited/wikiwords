@@ -66,8 +66,12 @@ public class GenerateTermsFlowTest {
         Tap inputTap = platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.REPLACE);
         TupleEntryCollector writer = inputTap.openForWrite(platform.makeFlowProcess());
 
-        Tuple t = new Tuple("Article1\t" + new String(Base64.encodeBase64("term1 term2 [[Article2a article2b]] term3 term4 term5 [[Article3a]]".getBytes("UTF-8")), "UTF-8"));
-        writer.add(t);
+        Tuple t1 = new Tuple("Article1\t" + new String(Base64.encodeBase64("term1 term2 [[Article2a article2b]] term3 term4 term5 [[Article3a]]".getBytes("UTF-8")), "UTF-8"));
+        writer.add(t1);
+        
+        // Verify we keep "123" as a term, so term1 isn't associated with Article4, but we don't emit it
+        Tuple t2 = new Tuple("Article2\t" + new String(Base64.encodeBase64("term1 123 [[Article4]]".getBytes("UTF-8")), "UTF-8"));
+        writer.add(t2);
         writer.close();
         
         final String workingDirname = "build/test/GenerateTermsFlowTest/testTermDistance/working";
@@ -123,6 +127,12 @@ public class GenerateTermsFlowTest {
         assertEquals("Article1", datum.getArticle());
         assertEquals("Article3a", datum.getArticleRef());
         assertEquals("article3a", datum.getTerm());
+        assertEquals(0, datum.getDistance());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article2", datum.getArticle());
+        assertEquals("Article4", datum.getArticleRef());
+        assertEquals("article4", datum.getTerm());
         assertEquals(0, datum.getDistance());
         
         assertFalse(iter.hasNext());
