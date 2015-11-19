@@ -44,6 +44,11 @@ public class WikiTemplates {
     
     public String getTemplateName(String templatePlusArgs) {
         String[] pieces = templatePlusArgs.split("\\|");
+        if (pieces.length == 0) {
+            // Can happen if we get passed a string containing only '|' chars.
+            return "";
+        }
+        
         String template = pieces[0];
         int namespaceIndex = template.indexOf(':');
         if (namespaceIndex != -1) {
