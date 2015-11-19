@@ -74,7 +74,7 @@ public class AnalyzeTermsFlow {
 
         // Group by term sort by score, take the top N, and reorder so terms are first
         termTFIDF = new GroupBy(termTFIDF, new Fields(TfIdfAssembly.TERM_FN), new Fields(TfIdfAssembly.TF_IDF_FN), true);
-        termTFIDF = new Every(termTFIDF, new First(20), Fields.RESULTS);
+        termTFIDF = new Every(termTFIDF, new First(options.getTopArticleLimit()), Fields.RESULTS);
         termTFIDF = new Retain(termTFIDF, new Fields(TfIdfAssembly.TERM_FN, TfIdfAssembly.DOC_FN, TfIdfAssembly.TF_IDF_FN));
         
         BasePath outputPath = options.getWorkingSubdirPath(WorkingConfig.TERM_SCORES_SUBDIR_NAME);

@@ -6,6 +6,7 @@ import org.kohsuke.args4j.Option;
 
 import cascading.flow.Flow;
 import cascading.flow.planner.PlannerException;
+import cascading.tuple.Fields;
 
 import com.scaleunlimited.cascading.BaseTool;
 import com.scaleunlimited.cascading.FlowResult;
@@ -64,13 +65,11 @@ public class AnalyzeTermsTool extends BaseTool {
     public static class AnalyzeTermsOptions extends WorkflowOptions {
         
         private int _totalArticles;
+        private int _topArticleLimit = 20;
         
         public AnalyzeTermsOptions() {
             super();
         }
-        
-        // TODO support options for how to convert distance to "term count" (weight)
-        // Value at 0, Min value
         
         public AnalyzeTermsOptions(WorkflowOptions baseOptions) {
             super(baseOptions);
@@ -83,6 +82,15 @@ public class AnalyzeTermsTool extends BaseTool {
 
         public int getTotalArticles() {
             return _totalArticles;
+        }
+
+        @Option(name = "-toparticles", usage = "number of top articles per term to report", required = false)
+        public void setTopArticleLimit(int topArticleLimit) {
+            _topArticleLimit = topArticleLimit;
+        }
+
+        public int getTopArticleLimit() {
+            return _topArticleLimit;
         }
         
     }
