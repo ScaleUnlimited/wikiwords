@@ -7,7 +7,11 @@ import info.bliki.wiki.dump.WikiXMLParser;
 
 import java.io.BufferedWriter;
 import java.io.Closeable;
+import java.io.DataInput;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -37,9 +41,18 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import org.xml.sax.SAXException;
 
+import com.scaleunlimited.wikiwords.ArticleToCategoriesMap;
+
 public class WikiDumpTool {
     private static final Logger LOGGER = Logger.getLogger(WikiDumpTool.class);
 
+    // Filenames for generated output
+    public static final String ARTICLES_TO_CATEGORIES_FILENAME = "articlestocategories.map";
+    public static final String CATEGORIES_FILENAME = "categories.txt";
+    public static final String REDIRECTS_FILENAME = "redirects.txt";
+    public static final String DISAMBIGUATIONS_FILENAME = "disambigs.txt";
+
+    // Counter names
     public static final String MAIN_PAGE_COUNTER = "main-page";
     public static final String REDIRECT_PAGE_COUNTER = "redirect-valid-page";
     public static final String REDIRECT_INVALID_PAGE_COUNTER = "redirect-invalid-page";
@@ -52,8 +65,9 @@ public class WikiDumpTool {
     public static final String DISAMBIGUATION_PAGE_COUNTER = "disambiguation-page";
     public static final String UNKNOWN_PAGE_COUNTER = "unknown-page";
     public static final String OTHER_PAGE_COUNTER = "other-page";
-    
     public static final String EXCEPTION_COUNTER = "exception";
+
+
     
     private List<Exception> _exceptions;
     
@@ -99,7 +113,7 @@ public class WikiDumpTool {
         
         // Save off category hierarchy
         Map<String, Set<String>> categories = filter.getCategories();
-        File categoryFile = new File(metadataDir, "categories.txt");
+        File categoryFile = new File(metadataDir, CATEGORIES_FILENAME);
         categoryFile.delete();
         
         // Note that we write out all entries, even if they don't have any parent category
@@ -127,7 +141,7 @@ public class WikiDumpTool {
         
         // Save off redirect info
         Map<String, String> redirects = filter.getRedirects();
-        File redirectFile = new File(metadataDir, "redirects.txt");
+        File redirectFile = new File(metadataDir, REDIRECTS_FILENAME);
         redirectFile.delete();
         
         try (BufferedWriter bw = new BufferedWriter(new FileWriterWithEncoding(redirectFile, "UTF-8"))) {
@@ -145,7 +159,7 @@ public class WikiDumpTool {
 
         // Save of disambiguation articles
         Set<String> disambigs = filter.getDisambigs();
-        File disambigsFile = new File(metadataDir, "disambigs.txt");
+        File disambigsFile = new File(metadataDir, DISAMBIGUATIONS_FILENAME);
         disambigsFile.delete();
         
         try (BufferedWriter bw = new BufferedWriter(new FileWriterWithEncoding(disambigsFile, "UTF-8"))) {
@@ -157,6 +171,16 @@ public class WikiDumpTool {
             bw.flush();
         } catch (Exception e) {
             LOGGER.error("Exception saving disambiguation info", e);
+        }
+        
+        // Save off article->categories data
+        ArticleToCategoriesMap a2c = filter.getArticleToCategoriesMap();
+        File a2cFile = new File(metadataDir, ARTICLES_TO_CATEGORIES_FILENAME);
+        try (FileOutputStream fos = new FileOutputStream(a2cFile)) {
+            DataOutputStream out = new DataOutputStream(fos);
+            a2c.write(out);
+        } catch (Exception e) {
+            LOGGER.error("Exception saving articles to categories info", e);
         }
 
         _exceptions = filter.getExceptions();
@@ -259,6 +283,7 @@ public class WikiDumpTool {
         private Map<String, Set<String>> _categories;
         private Map<String, String> _redirects;
         private Set<String> _disambigs;
+        private ArticleToCategoriesMap _articleToCategories;
         
         private Random _rand;
         
@@ -276,6 +301,7 @@ public class WikiDumpTool {
             _categories = new HashMap<String, Set<String>>();
             _redirects = new HashMap<>();
             _disambigs = new HashSet<>();
+            _articleToCategories = new ArticleToCategoriesMap();
             
             _writer = makePartFileWriter();
             
@@ -297,7 +323,7 @@ public class WikiDumpTool {
                     LOGGER.error("Invalid category page title: " + title);
                     incrementCounter(CATEGORY_INVALID_PAGE_COUNTER);
                 } else {
-                    Set<String> parentCategories = getParentCategories(text);
+                    Set<String> parentCategories = getCategories(text);
                     if (!parentCategories.isEmpty()) {
                         // Only save this off if we have parent categories.
                         String categoryName = convertTitleToArticle(title.substring("Category:".length()));
@@ -347,6 +373,12 @@ public class WikiDumpTool {
                     }
                 }
                 
+                String cleanedTitle = cleanText(title);
+                Set<String> categories = getCategories(text);
+                if (!categories.isEmpty()) {
+                    _articleToCategories.put(cleanedTitle, categories);
+                }
+                
                 try {
                     int partNumber = _curPage / _pagesPerFile;
                     if (partNumber > _curPart) {
@@ -357,7 +389,7 @@ public class WikiDumpTool {
                     }
 
                     // Write out this page, and increment counts.
-                    _writer.append(cleanText(title));
+                    _writer.append(cleanedTitle);
                     _writer.append('\t');
                     _writer.append(encodeText(text));
                     _writer.append('\n');
@@ -403,20 +435,20 @@ public class WikiDumpTool {
          * @param text MediaWiki markup text from a page.
          * @return Set of parent category names.
          */
-        protected Set<String> getParentCategories(String text) {
+        protected Set<String> getCategories(String text) {
             Matcher m = CATEGORY_PATTERN.matcher(text);
 
-            Set<String> parentCategories = new HashSet<>();
+            Set<String> result = new HashSet<>();
             while (m.find()) {
-                String parentCategory = m.group(1);
-                if (parentCategory.indexOf('|') != -1) {
-                    parentCategory = parentCategory.substring(0, parentCategory.indexOf('|'));
+                String category = m.group(1);
+                if (category.indexOf('|') != -1) {
+                    category = category.substring(0, category.indexOf('|'));
                 }
                 
-                parentCategories.add(convertTitleToArticle(parentCategory));
+                result.add(convertTitleToArticle(category));
             }
             
-            return parentCategories;
+            return result;
         }
         
         private int incrementCounter(String counter) {
@@ -474,6 +506,10 @@ public class WikiDumpTool {
             return _disambigs;
         }
         
+        public ArticleToCategoriesMap getArticleToCategoriesMap() {
+            return _articleToCategories;
+        }
+
         private void addException(IOException e) {
             if (_exceptions.size() < 100) {
                 _exceptions.add(e);

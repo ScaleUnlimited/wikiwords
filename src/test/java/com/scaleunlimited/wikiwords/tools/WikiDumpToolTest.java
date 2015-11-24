@@ -2,8 +2,12 @@ package com.scaleunlimited.wikiwords.tools;
 
 import static org.junit.Assert.*;
 
+import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
+import java.io.InputStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +17,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
 
+import com.scaleunlimited.wikiwords.ArticleToCategoriesMap;
 import com.scaleunlimited.wikiwords.tools.WikiDumpTool.WikiDumpFilter;
 
 public class WikiDumpToolTest {
@@ -62,16 +67,28 @@ public class WikiDumpToolTest {
         }
         
         // Verify we got a redirects file with 25 entries
-        lines = IOUtils.readLines(new FileReader(new File(metadataDir, "redirects.txt")));
+        lines = IOUtils.readLines(new FileReader(new File(metadataDir, WikiDumpTool.REDIRECTS_FILENAME)));
         assertEquals(25, lines.size());
         
         // Verify we got a dismbig file with 3 entries
-        lines = IOUtils.readLines(new FileReader(new File(metadataDir, "disambigs.txt")));
+        lines = IOUtils.readLines(new FileReader(new File(metadataDir, WikiDumpTool.DISAMBIGUATIONS_FILENAME)));
         assertEquals(3, lines.size());
         
         // Verify we got a categories file with 1 entry
-        lines = IOUtils.readLines(new FileReader(new File(metadataDir, "categories.txt")));
+        lines = IOUtils.readLines(new FileReader(new File(metadataDir, WikiDumpTool.CATEGORIES_FILENAME)));
         assertEquals(1, lines.size());
+        
+        // Verify we get an article to categories file wth 8 entries
+        ArticleToCategoriesMap a2cMap = new ArticleToCategoriesMap();
+        InputStream is = new FileInputStream(new File(metadataDir, WikiDumpTool.ARTICLES_TO_CATEGORIES_FILENAME));
+        DataInput in = new DataInputStream(is);
+        a2cMap.readFields(in);
+        is.close();
+        
+        assertEquals(8, a2cMap.size());
+        assertTrue(a2cMap.containsKey("Anarchism"));
+        assertEquals(5, a2cMap.get("Anarchism").size());
+        assertTrue(a2cMap.get("Anarchism").contains("Political_culture"));
     }
 
     @Test
@@ -96,11 +113,19 @@ public class WikiDumpToolTest {
     
     @Test
     public void testCategoryHandling() throws Exception {
-        File outputDir = new File("build/test/WikiDumpToolTest/testRedirectHandling");
+        File outputDir = new File("build/test/WikiDumpToolTest/testCategoryHandling");
         outputDir.mkdirs();
         
         WikiDumpFilter filter = new WikiDumpFilter(outputDir, 1, 1, false, 1.0f);
-        assertEquals(makeSet("Cold_War_military_installations", "Radar_stations") , filter.getParentCategories("[[Category:Cold War military installations]]\t[[Category:Radar stations]]"));
+        assertEquals(makeSet("Cold_War_military_installations", "Radar_stations") , filter.getCategories("[[Category:Cold War military installations]]\t[[Category:Radar stations]]"));
+        
+        assertEquals(makeSet("Anarchism", "Political_culture", "Political_ideologies", "Social_theories", "Anti-fascism", "Anti-capitalism", "Far-left_politics"), filter.getCategories("[[Category:Anarchism| ]]\n" +
+                        "[[Category:Political culture]]\n" +
+                        "[[Category:Political ideologies]]\n" +
+                        "[[Category:Social theories]]\n" +
+                        "[[Category:Anti-fascism]]\n" +
+                        "[[Category:Anti-capitalism]]\n" +
+                        "[[Category:Far-left politics]]"));
         filter.close();
     }
     
