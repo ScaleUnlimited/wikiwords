@@ -64,8 +64,9 @@ public class AnalyzeTermsTool extends BaseTool {
     
     public static class AnalyzeTermsOptions extends WorkflowOptions {
         
-        private int _totalArticles;
         private int _topArticleLimit = 20;
+        private int _minArticleRefs = 1;
+        private double _minScore = 0.0;
         
         public AnalyzeTermsOptions() {
             super();
@@ -75,15 +76,6 @@ public class AnalyzeTermsTool extends BaseTool {
             super(baseOptions);
         }
         
-        @Option(name = "-numarticles", usage = "number of unique Wikipedia articles referenced by links", required = true)
-        public void setTotalArticles(int totalArticles) {
-            _totalArticles = totalArticles;
-        }
-
-        public int getTotalArticles() {
-            return _totalArticles;
-        }
-
         @Option(name = "-toparticles", usage = "number of top articles per term to report", required = false)
         public void setTopArticleLimit(int topArticleLimit) {
             _topArticleLimit = topArticleLimit;
@@ -91,6 +83,24 @@ public class AnalyzeTermsTool extends BaseTool {
 
         public int getTopArticleLimit() {
             return _topArticleLimit;
+        }
+        
+        @Option(name = "-minrefs", usage = "minimum number of article refs for a term to be considered valid", required = false)
+        public void setMinArticleRefs(int minArticleRefs) {
+            _minArticleRefs = minArticleRefs;
+        }
+
+        public int getMinArticleRefs() {
+            return _minArticleRefs;
+        }
+
+        @Option(name = "-minscore", usage = "minimum score for term<->article relationship to be valid", required = false)
+        public void setMinScore(double minScore) {
+            _minScore = minScore;
+        }
+        
+        public double getMinScore() {
+            return _minScore;
         }
         
     }

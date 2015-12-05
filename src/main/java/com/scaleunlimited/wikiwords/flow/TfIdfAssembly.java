@@ -1,6 +1,7 @@
 package com.scaleunlimited.wikiwords.flow;
 
 import cascading.operation.aggregator.Count;
+import cascading.operation.expression.ExpressionFilter;
 import cascading.operation.expression.ExpressionFunction;
 import cascading.pipe.CoGroup;
 import cascading.pipe.Each;
@@ -41,9 +42,9 @@ public class TfIdfAssembly extends SubAssembly {
     
     // Output fields
     public static final String TF_IDF_FN = "tf-idf";
+    public static final String TERM_COUNT_PER_DOC_FN = "term_count_per_doc";
 
     // Intermediate fields
-    private static final String TERM_COUNT_PER_DOC_FN = "term_count_per_doc";
     private static final String TOTAL_TERM_COUNT_PER_DOC_FN = "total_term_count_per_doc";
     private static final String TEMP_DOC_FN = "temp_doc";
     private static final String TEMP_TERM_FN = "temp_term";
@@ -53,7 +54,7 @@ public class TfIdfAssembly extends SubAssembly {
     private static final String DOC_COUNT_PER_TERM_FN = "doc_count_per_term";
     private static final String TOTAL_DOC_COUNT_FN = "total_doc_count";
     
-    public TfIdfAssembly(Pipe termsPipe) {
+    public TfIdfAssembly(Pipe termsPipe, int minTermDocCount) {
         super(termsPipe);
         
         // For each term, we need to get a per-document count.
@@ -65,6 +66,13 @@ public class TfIdfAssembly extends SubAssembly {
                                         new Fields(TERM_COUNT_PER_DOC_FN), 
                                         Integer.class);
         // Output is DOC_FN, TERM_FN, TERM_COUNT_PER_DOC_FN
+        
+        // If the number of times the term occurs with the doc is too low, strip it out.
+        if (minTermDocCount > 0) {
+            termCountPerDocPipe = new Each( termCountPerDocPipe,
+                                            new Fields(TERM_COUNT_PER_DOC_FN),
+                                            new ExpressionFilter(String.format("$0 < %d",  minTermDocCount), Integer.class));
+        }
         
         // For each doc, we need to know the total # of terms too.
         Pipe totalCountPerDocPipe = new Pipe("total term count per doc pipe", termCountPerDocPipe);
@@ -85,9 +93,13 @@ public class TfIdfAssembly extends SubAssembly {
         tfPipe = new Discard(tfPipe, new Fields(TEMP_DOC_FN));
         // Output is DOC_FN, TERM_FN, TERM_COUNT_PER_DOC_FN, TOTAL_TERM_COUNT_PER_DOC_FN
         
-        tfPipe = new Each(tfPipe, new Fields(TERM_COUNT_PER_DOC_FN, TOTAL_TERM_COUNT_PER_DOC_FN), new ExpressionFunction(new Fields(TF_FN), "(float)$0/(float)$1", Float.class), Fields.SWAP);
+        // Use Fields.ALL so we keep TERM_COUNT_PER_DOC_FN, and then toss TOTAL_TERM_COUNT_PER_DOC_FN
+        tfPipe = new Each(tfPipe, new Fields(TERM_COUNT_PER_DOC_FN, TOTAL_TERM_COUNT_PER_DOC_FN), new ExpressionFunction(new Fields(TF_FN), "(float)$0/(float)$1", Float.class), Fields.ALL);
+        tfPipe = new Discard(tfPipe, new Fields(TOTAL_TERM_COUNT_PER_DOC_FN));
+        
+        // Convert to Lucene-style TF value (square root of TF)
         tfPipe = new Each(tfPipe, new Fields(TF_FN), new ExpressionFunction(new Fields(TF_FN), "(float)Math.sqrt((double)$0)", Float.class), Fields.REPLACE);
-        // Output is DOC_FN, TERM_FN, TF_FN
+        // Output is DOC_FN, TERM_FN, TF_FN, TERM_COUNT_PER_DOC_FN
         
         // Now for each term we need an IDF (inverse doc frequency).
         // TODO split this off of termCountPerDocPipe after first SumBy, as that already has unique term/doc results.
@@ -121,7 +133,7 @@ public class TfIdfAssembly extends SubAssembly {
         Pipe tfIdfPipe = new CoGroup(tfPipe, new Fields(TERM_FN), idfPipe, new Fields(TEMP_TERM_FN));
         tfIdfPipe = new Discard(tfIdfPipe, new Fields(TEMP_TERM_FN));
         tfIdfPipe = new Each(tfIdfPipe, new Fields(TF_FN, IDF_FN), new ExpressionFunction(new Fields(TF_IDF_FN), "$0 * $1", Float.class), Fields.SWAP);
-        // Output is TERM_FN, DOC_FN, TF_IDF_FN
+        // Output is TERM_FN, DOC_FN, TF_IDF_FN, TERM_COUNT_PER_DOC_FN
 
         setTails(tfIdfPipe);
     }

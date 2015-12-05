@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -28,11 +29,14 @@ import com.scaleunlimited.cascading.local.LocalPlatform;
 import com.scaleunlimited.wikiwords.WikiwordsCounters;
 import com.scaleunlimited.wikiwords.WorkflowOptions;
 import com.scaleunlimited.wikiwords.WorkingConfig;
+import com.scaleunlimited.wikiwords.datum.WikiCategoryDatum;
 import com.scaleunlimited.wikiwords.datum.WikiTermDatum;
 import com.scaleunlimited.wikiwords.tools.GenerateTermsTool.GenerateTermsOptions;
 import com.scaleunlimited.wikiwords.tools.WikiDumpTool;
 
 public class GenerateTermsFlowTest {
+
+    private static final int MAX_DISTANCE = 20;
 
     @Test
     public void test() throws Exception {
@@ -47,7 +51,17 @@ public class GenerateTermsFlowTest {
             datum.setTupleEntry(iter.next());
             // TODO verify that each field looks correct?
             // System.out.println(datum.getTuple());
-        }
+            
+            // Verify that none of the terms are outside of the Latin (Base + extended) blocks.
+            String term = datum.getTerm();
+            assertFalse(term.isEmpty());
+            
+            Character.UnicodeBlock block = Character.UnicodeBlock.of(term.charAt(0));
+            assertTrue("Term outside of Latin blocks: " + term, (block == Character.UnicodeBlock.BASIC_LATIN) || (block == Character.UnicodeBlock.LATIN_1_SUPPLEMENT));
+
+            assertTrue(datum.getDistance() >= 0);
+            assertTrue("Distance is greater than max: " + datum.getDistance(), datum.getDistance() <= MAX_DISTANCE);
+       }
         
         // Verify we got the expected number of results.
         Map<String, Long> counters = options.getCounters(GenerateTermsFlow.class);
@@ -55,6 +69,59 @@ public class GenerateTermsFlowTest {
         assertEquals(15, (long)counters.get(counterName));
     }
 
+    @Test
+    public void testCategoryExtraction() throws Exception {
+        final String inputDirname = "build/test/GenerateTermsFlowTest/testCategoryExtraction/in";
+        File inputDir = new File(inputDirname);
+        inputDir.mkdirs();
+        
+        BasePlatform platform = new LocalPlatform(GenerateTermsFlowTest.class);
+        BasePath inputPath = platform.makePath(inputDir.getAbsolutePath());
+        Tap inputTap = platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.REPLACE);
+        TupleEntryCollector writer = inputTap.openForWrite(platform.makeFlowProcess());
+
+        writer.add(makeWikiLine("Article1", "term1 term2 [[Category: Fizz]] [[Category: Ball]]"));
+        writer.add(makeWikiLine("Article2", "term1 term2 [[Category: Foo|blah]] [[Category: Bar]]"));
+        writer.close();
+        
+        final String workingDirname = "build/test/GenerateTermsFlowTest/testCategoryExtraction/working";
+        File workingDir = new File(workingDirname);
+        workingDir.mkdirs();
+
+        GenerateTermsOptions options = new GenerateTermsOptions();
+        options.setDebug(true);
+        options.setMaxDistance(1);
+        options.setInputDirname(inputDirname);
+        options.setWorkingDirname(workingDirname);
+        
+        Flow flow = GenerateTermsFlow.createFlow(options);
+        FlowResult fr = FlowRunner.run(flow);
+        
+        // Verify we get categories as one of the results.
+        BasePath outputPath = options.getWorkingSubdirPath(WorkingConfig.CATEGORIES_SUBDIR_NAME);
+        Tap outputTap = platform.makeTap(platform.makeBinaryScheme(WikiCategoryDatum.FIELDS), outputPath, SinkMode.KEEP);
+        Iterator<TupleEntry> iter = outputTap.openForRead(platform.makeFlowProcess());
+
+        WikiCategoryDatum datum = new WikiCategoryDatum();
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Fizz", datum.getCategory());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Ball", datum.getCategory());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article2", datum.getArticle());
+        assertEquals("Foo", datum.getCategory());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article2", datum.getArticle());
+        assertEquals("Bar", datum.getCategory());
+        
+        assertFalse(iter.hasNext());
+    }
+    
     @Test
     public void testTermDistance() throws Exception {
         final String inputDirname = "build/test/GenerateTermsFlowTest/testTermDistance/in";
@@ -138,6 +205,14 @@ public class GenerateTermsFlowTest {
         assertFalse(iter.hasNext());
     }
     
+    protected static Tuple makeWikiLine(String article, String text) {
+        try {
+            return new Tuple(article + "\t" + new String(Base64.encodeBase64(text.getBytes("UTF-8"))));
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException("Impossible exception", e);
+        }
+    }
+    
     protected static GenerateTermsOptions generateTerms(String testDirname) throws Exception {
         final String inputDirname = testDirname + "/in";
         File inputDir = new File(inputDirname);
@@ -158,7 +233,7 @@ public class GenerateTermsFlowTest {
         
         GenerateTermsOptions options = new GenerateTermsOptions();
         options.setDebug(true);
-        options.setMaxDistance(20);
+        options.setMaxDistance(MAX_DISTANCE);
         options.setInputDirname(inputDirname);
         options.setWorkingDirname(workingDirname);
         

@@ -50,6 +50,7 @@ import com.scaleunlimited.wikiwords.WikiTemplates;
 import com.scaleunlimited.wikiwords.WikiwordsCounters;
 import com.scaleunlimited.wikiwords.WorkingConfig;
 import com.scaleunlimited.wikiwords.XMLPath;
+import com.scaleunlimited.wikiwords.datum.WikiCategoryDatum;
 import com.scaleunlimited.wikiwords.datum.WikiTermDatum;
 import com.scaleunlimited.wikiwords.tools.GenerateTermsTool.GenerateTermsOptions;
 
@@ -66,22 +67,35 @@ public class GenerateTermsFlow {
 
     public static Flow createFlow(GenerateTermsOptions options) throws Exception {
         
-        // We're reading in text files, which we have to run through an HTML generator.
+        // As a convenience, create the workfing directory if it doesn't exist.
         BasePlatform platform = options.getPlatform(GenerateTermsFlow.class);
+        BasePath workingPath = options.getWorkingPath();
+        workingPath.mkdirs();
+        
+        // We're reading in text files, which we have to run through an HTML generator.
         BasePath inputPath = platform.makePath(options.getInputDirname());
         Tap sourceTap = platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.KEEP);
-        Pipe p = new Pipe("text lines");
-        p = new Each(p, new Fields("line"), new ExtractFields(), Fields.RESULTS);
-        p = new Each(p, new ConvertToTerms(options.getMaxDistanceToLink()), Fields.RESULTS);
+        Pipe lines = new Pipe("text lines");
+        lines = new Each(lines, new Fields("line"), new ExtractFields(), Fields.RESULTS);
         
-        BasePath outputPath = options.getWorkingSubdirPath(WorkingConfig.TERMS_SUBDIR_NAME);
-        Tap sinkTap = platform.makeTap(platform.makeBinaryScheme(WikiTermDatum.FIELDS), outputPath, SinkMode.REPLACE);
+        Pipe terms = new Pipe("terms", lines);
+        terms = new Each(terms, new ConvertToTerms(options.getMaxDistanceToLink()), Fields.RESULTS);
+        
+        Pipe categories = new Pipe("categories", lines);
+        categories = new Each(categories, new ConvertToCategories(), Fields.RESULTS);
+        
+        BasePath termsOutputPath = options.getWorkingSubdirPath(WorkingConfig.TERMS_SUBDIR_NAME);
+        Tap termsSinkTap = platform.makeTap(platform.makeBinaryScheme(WikiTermDatum.FIELDS), termsOutputPath, SinkMode.REPLACE);
+        
+        BasePath categoriesOutputPath = options.getWorkingSubdirPath(WorkingConfig.CATEGORIES_SUBDIR_NAME);
+        Tap categoriesSinkTap = platform.makeTap(platform.makeBinaryScheme(WikiCategoryDatum.FIELDS), categoriesOutputPath, SinkMode.REPLACE);
         
         FlowDef flowDef = new FlowDef()
-            .setName("Generate terms")
+            .setName("Generate terms & categories")
             .setDebugLevel(options.isDebug() ? DebugLevel.VERBOSE : DebugLevel.NONE)
-            .addSource(p, sourceTap)
-            .addTailSink(p, sinkTap);
+            .addSource(lines, sourceTap)
+            .addTailSink(terms, termsSinkTap)
+            .addTailSink(categories, categoriesSinkTap);
         
         return platform.makeFlowConnector().connect(flowDef);
     }
@@ -129,6 +143,55 @@ public class GenerateTermsFlow {
             _flowProcess.increment(WikiwordsCounters.ARTICLES, 1);
         }
         
+    }
+    
+    /**
+     * Convert the MediaWiki markup to HTML, then parse that and extract the terms.
+     *
+     */
+    @SuppressWarnings("serial")
+    public static class ConvertToCategories extends BaseOperation<Void> implements Function<Void> {
+
+        private static Pattern CATEGORY_PATTERN = Pattern.compile("\\[\\[Category:(.+?)\\]\\]", Pattern.CASE_INSENSITIVE);
+
+        private transient WikiCategoryDatum _result;
+        private transient LoggingFlowProcess _flowProcess;
+
+        public ConvertToCategories() {
+            super(ARTICLE_FIELDS.size(), WikiCategoryDatum.FIELDS);
+        }
+
+        @Override
+        public void prepare(FlowProcess flowProcess, OperationCall<Void> operationCall) {
+            super.prepare(flowProcess, operationCall);
+            _result = new WikiCategoryDatum();
+            _flowProcess = new LoggingFlowProcess<>(flowProcess);
+        }
+
+        @Override
+        public void operate(FlowProcess flowProcess, FunctionCall<Void> functionCall) {
+            TupleEntry te = functionCall.getArguments();
+
+            _result.setArticle(te.getString(ARTICLE_NAME_FN));
+            String text = te.getString(ARTICLE_TEXT_FN);
+            Matcher m = CATEGORY_PATTERN.matcher(text);
+            
+            while (m.find()) {
+                String category = m.group(1);
+                if (category.indexOf('|') != -1) {
+                    category = category.substring(0, category.indexOf('|'));
+                }
+                
+                category = category.trim();
+                _result.setCategory(category);
+                functionCall.getOutputCollector().add(_result.getTuple());
+            }
+        }
+        
+        private String convertTitleToArticle(String title) {
+            return title.replaceAll(" ",  "_");
+        }
+
     }
     
     /**
@@ -269,11 +332,19 @@ public class GenerateTermsFlow {
                 
                 ArticleLinkPosition linkPos = new ArticleLinkPosition("", 0);
                 for (int i = 0; i < terms.size(); i++) {
+                    String term = terms.get(i);
+                    
                     // Ignore terms that we've decided to strip.
-                    if (terms.get(i).equals(STRIPPED_TERM)) {
+                    if (term.equals(STRIPPED_TERM)) {
                         continue;
                     }
                     
+                    // Ignore terms that aren't in the base Latin or Latin extended block
+                    Character.UnicodeBlock block = Character.UnicodeBlock.of(term.charAt(0));
+                    if ((block != Character.UnicodeBlock.BASIC_LATIN) && (block != Character.UnicodeBlock.LATIN_1_SUPPLEMENT)) {
+                        continue;
+                    }
+
                     // Find the closest link that's at or after position <i>
                     linkPos.setLinkPosition(i);
                     int linkIndex = Collections.binarySearch(links, linkPos);
@@ -303,7 +374,7 @@ public class GenerateTermsFlow {
                     
                     if (bestLinkIndex != -1) {
                         _result.setArticleRef(links.get(bestLinkIndex).getArticleName());
-                        _result.setTerm(terms.get(i));
+                        _result.setTerm(term);
                         _result.setDistance(Math.min(followingDistance, previousDistance));
                         functionCall.getOutputCollector().add(_result.getTupleEntry());
                         _flowProcess.increment(WikiwordsCounters.WIKITERM, 1);
