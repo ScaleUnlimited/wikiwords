@@ -8,5 +8,6 @@ public interface WorkingConfig {
     public static final String TERMDF_SUBDIR_NAME = "term_df";
     public static final String COUNTERS_SUBDIR_NAME = "counters";
     public static final String TERM_SCORES_SUBDIR_NAME = "term_scores";
+    public static final String TERM_CATEGORIES_SUBDIR_NAME = "term_categories";
 
 }

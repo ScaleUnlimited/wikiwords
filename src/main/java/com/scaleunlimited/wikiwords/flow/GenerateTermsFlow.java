@@ -172,7 +172,7 @@ public class GenerateTermsFlow {
         public void operate(FlowProcess flowProcess, FunctionCall<Void> functionCall) {
             TupleEntry te = functionCall.getArguments();
 
-            _result.setArticle(te.getString(ARTICLE_NAME_FN));
+            _result.setArticle(convertTitleToArticle(te.getString(ARTICLE_NAME_FN)));
             String text = te.getString(ARTICLE_TEXT_FN);
             Matcher m = CATEGORY_PATTERN.matcher(text);
             

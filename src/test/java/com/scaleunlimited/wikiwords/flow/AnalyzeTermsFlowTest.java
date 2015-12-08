@@ -27,12 +27,11 @@ public class AnalyzeTermsFlowTest {
         GenerateTermsOptions termsOptions = GenerateTermsFlowTest.generateTerms("build/test/AnalyzeTermsFlowTest/test");
         
         AnalyzeTermsOptions options = new AnalyzeTermsOptions(termsOptions);
+        options.setDebug(true);
         Flow flow = AnalyzeTermsFlow.createFlow(options);
         
         FlowResult fr = FlowRunner.run(flow);
         options.saveCounters(AnalyzeTermsFlow.class, fr.getCounters());
-        
-        // TODO validate results.
         
         BasePlatform platform = termsOptions.getPlatform(AnalyzeTermsFlowTest.class);
         BasePath termScoresPath = options.getWorkingSubdirPath(WorkingConfig.TERM_SCORES_SUBDIR_NAME);
@@ -54,13 +53,37 @@ public class AnalyzeTermsFlowTest {
         iter.close();
         assertTrue(foundZeno);
         
-        // Now run again, but this time with a min term count of 3
+        BasePath termCategoriesPath = options.getWorkingSubdirPath(WorkingConfig.TERM_CATEGORIES_SUBDIR_NAME);
+        Tap termCategoriesTap = platform.makeTap(platform.makeTextScheme(), termCategoriesPath, SinkMode.KEEP);
+        iter = termCategoriesTap.openForRead(platform.makeFlowProcess());
+        while (iter.hasNext()) {
+            TupleEntry te = iter.next();
+            // term <tab> category <tab> score
+            String[] pieces = te.getString("line").split("\t", 3);
+            assertEquals(3, pieces.length);
+        }
+        
+        iter.close();
+    }
+
+    @Test
+    public void testTermAndScoreLimits() throws Exception {
+        GenerateTermsOptions termsOptions = GenerateTermsFlowTest.generateTerms("build/test/AnalyzeTermsFlowTest/testTermAndScoreLimits");
+        
+        AnalyzeTermsOptions options = new AnalyzeTermsOptions(termsOptions);
+        // Use a min term count of 3, and a min score of 2.0
         options.setMinArticleRefs(3);
         options.setMinScore(2.0);
-        flow = AnalyzeTermsFlow.createFlow(options);
-        FlowRunner.run(flow);
-
-        iter = termScoresTap.openForRead(platform.makeFlowProcess());
+        Flow flow = AnalyzeTermsFlow.createFlow(options);
+        
+        FlowResult fr = FlowRunner.run(flow);
+        options.saveCounters(AnalyzeTermsFlow.class, fr.getCounters());
+        
+        BasePlatform platform = termsOptions.getPlatform(AnalyzeTermsFlowTest.class);
+        BasePath termScoresPath = options.getWorkingSubdirPath(WorkingConfig.TERM_SCORES_SUBDIR_NAME);
+        Tap termScoresTap = platform.makeTap(platform.makeTextScheme(), termScoresPath, SinkMode.KEEP);
+        TupleEntryIterator iter = termScoresTap.openForRead(platform.makeFlowProcess());
+        
         boolean foundZhuangzi = false;
         while (iter.hasNext()) {
             TupleEntry te = iter.next();

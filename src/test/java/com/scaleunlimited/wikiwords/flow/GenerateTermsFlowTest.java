@@ -81,7 +81,7 @@ public class GenerateTermsFlowTest {
         TupleEntryCollector writer = inputTap.openForWrite(platform.makeFlowProcess());
 
         writer.add(makeWikiLine("Article1", "term1 term2 [[Category: Fizz]] [[Category: Ball]]"));
-        writer.add(makeWikiLine("Article2", "term1 term2 [[Category: Foo|blah]] [[Category: Bar]]"));
+        writer.add(makeWikiLine("Article2a Article2b", "term1 term2 [[Category: Foo|blah]] [[Category: Bar]]"));
         writer.close();
         
         final String workingDirname = "build/test/GenerateTermsFlowTest/testCategoryExtraction/working";
@@ -112,11 +112,11 @@ public class GenerateTermsFlowTest {
         assertEquals("Ball", datum.getCategory());
         
         datum.setTupleEntry(iter.next());
-        assertEquals("Article2", datum.getArticle());
+        assertEquals("Article2a_Article2b", datum.getArticle());
         assertEquals("Foo", datum.getCategory());
         
         datum.setTupleEntry(iter.next());
-        assertEquals("Article2", datum.getArticle());
+        assertEquals("Article2a_Article2b", datum.getArticle());
         assertEquals("Bar", datum.getCategory());
         
         assertFalse(iter.hasNext());
