@@ -37,6 +37,7 @@ import cascading.operation.FunctionCall;
 import cascading.operation.OperationCall;
 import cascading.pipe.Each;
 import cascading.pipe.Pipe;
+import cascading.tap.MultiSourceTap;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tuple.Fields;
@@ -73,8 +74,13 @@ public class GenerateTermsFlow {
         workingPath.mkdirs();
         
         // We're reading in text files, which we have to run through an HTML generator.
-        BasePath inputPath = platform.makePath(options.getInputDirname());
-        Tap sourceTap = platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.KEEP);
+        List<Tap> sourceTaps = new ArrayList<>();
+        for (String inputDirname : options.getInputDirname().split(",")) {
+            BasePath inputPath = platform.makePath(inputDirname.trim());
+            sourceTaps.add(platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.KEEP));
+        }
+        MultiSourceTap sourceTap = new MultiSourceTap<>(sourceTaps.toArray(new Tap[sourceTaps.size()]));
+        
         Pipe lines = new Pipe("text lines");
         lines = new Each(lines, new Fields("line"), new ExtractFields(), Fields.RESULTS);
         
@@ -548,7 +554,7 @@ public class GenerateTermsFlow {
                 return false;
             }
             
-            if (Character.isLetter(term.charAt(0))) {
+            if ((term.length() > 2) && Character.isLetter(term.charAt(0))) {
                 list.add(term);
                 return true;
             } else {

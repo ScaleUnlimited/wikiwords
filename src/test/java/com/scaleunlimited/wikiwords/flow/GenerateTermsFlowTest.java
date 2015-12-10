@@ -66,7 +66,7 @@ public class GenerateTermsFlowTest {
         // Verify we got the expected number of results.
         Map<String, Long> counters = options.getCounters(GenerateTermsFlow.class);
         String counterName = WorkflowOptions.getFlowCounterName(WikiwordsCounters.ARTICLES);
-        assertEquals(15, (long)counters.get(counterName));
+        assertEquals(16, (long)counters.get(counterName));
     }
 
     @Test
@@ -118,6 +118,68 @@ public class GenerateTermsFlowTest {
         datum.setTupleEntry(iter.next());
         assertEquals("Article2a_Article2b", datum.getArticle());
         assertEquals("Bar", datum.getCategory());
+        
+        assertFalse(iter.hasNext());
+    }
+    
+    @Test
+    public void testTermFiltering() throws Exception {
+        final String baseDirname = "build/test/GenerateTermsFlowTest/testTermFiltering/";
+        final String inputDirname = baseDirname + "in";
+        File inputDir = new File(inputDirname);
+        inputDir.mkdirs();
+        
+        BasePlatform platform = new LocalPlatform(GenerateTermsFlowTest.class);
+        BasePath inputPath = platform.makePath(inputDir.getAbsolutePath());
+        Tap inputTap = platform.makeTap(platform.makeTextScheme(), inputPath, SinkMode.REPLACE);
+        TupleEntryCollector writer = inputTap.openForWrite(platform.makeFlowProcess());
+
+        Tuple t1 = new Tuple("Article1\t" + new String(Base64.encodeBase64("a ab [[Article2]] term1 123 [[Article3]] term4".getBytes("UTF-8")), "UTF-8"));
+        writer.add(t1);
+        writer.close();
+
+        final String workingDirname = baseDirname + "working";
+        File workingDir = new File(workingDirname);
+        workingDir.mkdirs();
+
+        GenerateTermsOptions options = new GenerateTermsOptions();
+        options.setDebug(true);
+        options.setMaxDistance(2);
+        options.setInputDirname(inputDirname);
+        options.setWorkingDirname(workingDirname);
+        
+        Flow flow = GenerateTermsFlow.createFlow(options);
+        FlowResult fr = FlowRunner.run(flow);
+
+        // Verify that we got the expected results.
+        BasePath outputPath = options.getWorkingSubdirPath(WorkingConfig.TERMS_SUBDIR_NAME);
+        Tap outputTap = platform.makeTap(platform.makeBinaryScheme(WikiTermDatum.FIELDS), outputPath, SinkMode.KEEP);
+        Iterator<TupleEntry> iter = outputTap.openForRead(platform.makeFlowProcess());
+        
+        WikiTermDatum datum = new WikiTermDatum();
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Article2", datum.getArticleRef());
+        assertEquals("article2", datum.getTerm());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Article2", datum.getArticleRef());
+        assertEquals("term1", datum.getTerm());
+        
+        // Note that term1 won't be associated with Article3, as it's already been
+        // associated with Article2
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Article3", datum.getArticleRef());
+        assertEquals("article3", datum.getTerm());
+        
+        datum.setTupleEntry(iter.next());
+        assertEquals("Article1", datum.getArticle());
+        assertEquals("Article3", datum.getArticleRef());
+        assertEquals("term4", datum.getTerm());
         
         assertFalse(iter.hasNext());
     }
@@ -214,6 +276,10 @@ public class GenerateTermsFlowTest {
     }
     
     protected static GenerateTermsOptions generateTerms(String testDirname) throws Exception {
+        return generateTerms("src/test/resources/enwiki-snippet.xml", testDirname);
+    }
+    
+    protected static GenerateTermsOptions generateTerms(String inputFile, String testDirname) throws Exception {
         final String inputDirname = testDirname + "/in";
         File inputDir = new File(inputDirname);
         inputDir.mkdirs();
@@ -224,7 +290,7 @@ public class GenerateTermsFlowTest {
         
         // Run WikiDumpTool to generate a file
         WikiDumpTool tool = new WikiDumpTool();
-        tool.run("src/test/resources/enwiki-snippet.xml", inputDirname, metadataDirname, 100, 100);
+        tool.run(inputFile, inputDirname, metadataDirname, 100, 100);
         
         // Run our flow, in test mode
         final String workingDirname = testDirname + "/working";

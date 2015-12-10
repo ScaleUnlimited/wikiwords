@@ -37,7 +37,7 @@ public class CategoryGraphTool {
         // Category names are in the xxx_yyy format (Nevada_County).
         //
         // There are 0...n parent categories. There can also be cyclic loops
-        // in the resulting graph, which we break at arbitrary locations.
+        // in the resulting graph.
         
         Map<Category, String> categoriesWithParents = new HashMap<>();
         CategoryGraph graph = new CategoryGraph();
@@ -70,14 +70,11 @@ public class CategoryGraphTool {
         // now that we've created the parent category objects and added them to the graph.
         LOGGER.info("Linking parents...");
         
-        Category c = new Category();
         for (Category category : categoriesWithParents.keySet()) {
             String parentNames = categoriesWithParents.get(category);
             Set<Category> parents = new HashSet<>();
             for (String parentName : parentNames.split("\\|")) {
-                c.setName(parentName);
-                
-                Category parent = graph.getCategory(c);
+                Category parent = graph.get(parentName);
                 if (parent == null) {
                     // We have a category that has a parent category that doesn't exist,
                     // so go add it.
@@ -89,14 +86,6 @@ public class CategoryGraphTool {
             }
             
             category.setParents(parents);
-        }
-        
-        // See if we have cycles.
-        LOGGER.info("Checking for cycles...");
-        if (graph.hasCycles()) {
-            LOGGER.info("Breaking cycles...");
-            int numBroken = graph.breakCycles();
-            LOGGER.info(String.format("Broke %d cycles", numBroken));
         }
         
         File outputFile = new File(options.getOutputFilename());

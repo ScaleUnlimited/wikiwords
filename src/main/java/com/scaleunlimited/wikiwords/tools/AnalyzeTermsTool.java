@@ -67,6 +67,7 @@ public class AnalyzeTermsTool extends BaseTool {
         private int _topArticleLimit = 20;
         private int _minArticleRefs = 1;
         private double _minScore = 0.0;
+        private String _categoryGraphFilename;
         
         public AnalyzeTermsOptions() {
             super();
@@ -101,6 +102,15 @@ public class AnalyzeTermsTool extends BaseTool {
         
         public double getMinScore() {
             return _minScore;
+        }
+
+        @Option(name = "-catgraph", usage = "path to category graph file", required = false)
+        public void setCategoryGraphFilename(String categoryGraphFilename) {
+            _categoryGraphFilename = categoryGraphFilename;
+        }
+        
+        public String getCategoryGraphFilename() {
+            return _categoryGraphFilename;
         }
         
     }

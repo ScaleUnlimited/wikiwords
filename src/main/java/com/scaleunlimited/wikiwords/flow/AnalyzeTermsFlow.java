@@ -1,11 +1,25 @@
 package com.scaleunlimited.wikiwords.flow;
 
+import java.io.DataInput;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.apache.log4j.Logger;
 
 import cascading.flow.Flow;
 import cascading.flow.FlowDef;
+import cascading.flow.FlowProcess;
+import cascading.operation.BaseOperation;
 import cascading.operation.Debug;
 import cascading.operation.DebugLevel;
+import cascading.operation.Function;
+import cascading.operation.FunctionCall;
+import cascading.operation.OperationCall;
 import cascading.operation.aggregator.First;
 import cascading.operation.expression.ExpressionFilter;
 import cascading.operation.expression.ExpressionFunction;
@@ -22,9 +36,14 @@ import cascading.pipe.assembly.Unique;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tuple.Fields;
+import cascading.tuple.Tuple;
+import cascading.tuple.TupleEntry;
 
 import com.scaleunlimited.cascading.BasePath;
 import com.scaleunlimited.cascading.BasePlatform;
+import com.scaleunlimited.cascading.LoggingFlowProcess;
+import com.scaleunlimited.wikiwords.Category;
+import com.scaleunlimited.wikiwords.CategoryGraph;
 import com.scaleunlimited.wikiwords.WikiwordsCounters;
 import com.scaleunlimited.wikiwords.WorkingConfig;
 import com.scaleunlimited.wikiwords.datum.WikiCategoryDatum;
@@ -35,12 +54,7 @@ import com.scaleunlimited.wikiwords.tools.GenerateTermsTool;
 public class AnalyzeTermsFlow {
     private static final Logger LOGGER = Logger.getLogger(AnalyzeTermsFlow.class);
 
-    public AnalyzeTermsFlow() {
-        // TODO Auto-generated constructor stub
-    }
-    
     public static Flow createFlow(AnalyzeTermsOptions options) throws Exception {
-        
         
         BasePlatform platform = options.getPlatform(AnalyzeTermsFlow.class);
         FlowDef flowDef = new FlowDef()
@@ -51,7 +65,7 @@ public class AnalyzeTermsFlow {
         BasePath termPath = options.getWorkingSubdirPath(WorkingConfig.TERMS_SUBDIR_NAME);
         Tap termTap = platform.makeTap(platform.makeBinaryScheme(WikiTermDatum.FIELDS), termPath, SinkMode.KEEP);
         Pipe terms = new Pipe("terms");
-        // terms = new Each(terms, DebugLevel.VERBOSE, new Debug("terms", true));
+        terms = new Each(terms, DebugLevel.VERBOSE, new Debug("terms", true));
         flowDef.addSource(terms, termTap);
         
         BasePath categoryPath = options.getWorkingSubdirPath(WorkingConfig.CATEGORIES_SUBDIR_NAME);
@@ -59,20 +73,6 @@ public class AnalyzeTermsFlow {
         Pipe categories = new Pipe("categories");
         categories = new Each(categories, DebugLevel.VERBOSE, new Debug("categories", true));
         flowDef.addSource(categories, categoryTap);
-        
-        // Calculate the DF for each term.
-        /*
-        Pipe termDF = new Pipe("term DF", p);
-        termDF = new Retain(termDF, new Fields(WikiTermDatum.TERM_FN, WikiTermDatum.ARTICLE_NAME_FN));
-        termDF = new Unique(termDF, new Fields(WikiTermDatum.TERM_FN, WikiTermDatum.ARTICLE_NAME_FN));
-        termDF = new CountBy(termDF, new Fields(WikiTermDatum.TERM_FN), new Fields("num_articles"));
-        // termDF = new Each(termDF, DebugLevel.VERBOSE, new Debug("docs per term", true));
-        
-        termDF = new GroupBy(termDF, Fields.NONE, new Fields("num_articles"), true);
-        termDF = new Each(termDF, new Fields("num_articles"), new ExpressionFunction(new Fields("df"), "(float)num_articles / " + options.getTotalArticles(), Float.class), Fields.SWAP);
-        Tap termDFSink = platform.makeTap(platform.makeTextScheme(), options.getWorkingSubdirPath(WorkingConfig.TERMDF_SUBDIR_NAME), SinkMode.REPLACE);
-        flowDef.addTailSink(termDF, termDFSink);
-        */
         
         // Calculate the TF*IDF value for term/article ref pairs.
         Pipe termTFIDF = new Pipe("term TF*IDF pipe", terms);
@@ -85,13 +85,20 @@ public class AnalyzeTermsFlow {
                                 new Fields(WikiTermDatum.TERM_FN, WikiTermDatum.ARTICLE_REF_FN),
                                 new Fields(TfIdfAssembly.TERM_FN, TfIdfAssembly.DOC_FN));
         
-        termTFIDF = new TfIdfAssembly(termTFIDF, options.getMinArticleRefs());
+        termTFIDF = new TfIdfAssembly(termTFIDF);
 
+        // If the number of times the term occurs with the doc is too low, strip it out.
+        if (options.getMinArticleRefs() > 0) {
+            termTFIDF = new Each( termTFIDF,
+                               new Fields(TfIdfAssembly.TERM_COUNT_PER_DOC_FN),
+                               new ExpressionFilter(String.format("$0 < %d",  options.getMinArticleRefs()), Integer.class));
+        }
+        
         // See if the score is below a threshold
         if (options.getMinScore() > 0.0) {
             termTFIDF = new Each(   termTFIDF,
                                     new Fields(TfIdfAssembly.TF_IDF_FN),
-                                    new ExpressionFilter(String.format("$0 < %f", options.getMinScore()), Double.class));
+                                    new ExpressionFilter(String.format("$0 < %f", options.getMinScore()), Float.class));
         }
         
         // Group by term, sort by score, take the top N, and reorder so terms are first
@@ -109,6 +116,12 @@ public class AnalyzeTermsFlow {
                                             termTFIDF, new Fields(TfIdfAssembly.DOC_FN));
         // We've got WikiCategoryDatum.ARTICLE_NAME_FN, WikiCategoryDatum.CATEGORY_FN, TfIdfAssembly.DOC_FN, TfIdfAssembly.TERM_FN, TfIdfAssembly.TF_IDF_FN, TfIdfAssembly.TERM_COUNT_PER_DOC_FN
         termCategoryPipe = new Retain(termCategoryPipe, new Fields(TfIdfAssembly.TERM_FN, WikiCategoryDatum.CATEGORY_FN, TfIdfAssembly.TF_IDF_FN));
+        
+        // Expand categories (if requested), and then sum term x category
+        if (options.getCategoryGraphFilename() != null) {
+            termCategoryPipe = new Each(termCategoryPipe, new Fields(WikiCategoryDatum.CATEGORY_FN), new ExpandCategory(platform, options.getCategoryGraphFilename()), Fields.SWAP);
+        }
+        
         termCategoryPipe = new SumBy(termCategoryPipe, new Fields(TfIdfAssembly.TERM_FN, WikiCategoryDatum.CATEGORY_FN), new Fields(TfIdfAssembly.TF_IDF_FN), new Fields("category_score"), Float.class);
         
         BasePath termCategoryPath = options.getWorkingSubdirPath(WorkingConfig.TERM_CATEGORIES_SUBDIR_NAME);
@@ -117,5 +130,57 @@ public class AnalyzeTermsFlow {
         
         return platform.makeFlowConnector().connect(flowDef);
     }
+
+    /**
+     * Expand the passed category to all parents.
+     *
+     */
+    @SuppressWarnings("serial")
+    public static class ExpandCategory extends BaseOperation<Void> implements Function<Void> {
+
+        private String _categoryGraphPathname;
+        private BasePlatform _platform;
+        
+        private transient LoggingFlowProcess _flowProcess;
+        private transient CategoryGraph _categoryGraph;
+        private transient Tuple _result;
+        
+        public ExpandCategory(BasePlatform platform, String categoryGraphPathname) {
+            super(1, new Fields(WikiCategoryDatum.CATEGORY_FN));
+            
+            _platform = platform;
+            _categoryGraphPathname = categoryGraphPathname;
+        }
+
+        @Override
+        public void prepare(FlowProcess flowProcess, OperationCall<Void> operationCall) {
+            super.prepare(flowProcess, operationCall);
+            _flowProcess = new LoggingFlowProcess<>(flowProcess);
+            _result = Tuple.size(1);
+            
+            _categoryGraph = new CategoryGraph();
+            try (InputStream is = _platform.makePath(_categoryGraphPathname).openInputStream()) {
+                DataInput in = new DataInputStream(is);
+                _categoryGraph.readFields(in);
+            } catch (Exception e) {
+                throw new RuntimeException("Error opening category graph file", e);
+            }
+        }
+
+        @Override
+        public void operate(FlowProcess flowProcess, FunctionCall<Void> functionCall) {
+            String categoryName = functionCall.getArguments().getString(0);
+            if (!_categoryGraph.exists(categoryName)) {
+                LOGGER.warn("Got unknown category: " + categoryName);
+                return;
+            }
+            
+            for (String catName : _categoryGraph.getTree(categoryName)) {
+                _result.setString(0, catName);
+                functionCall.getOutputCollector().add(_result);
+            }
+        }
+    }
+    
 
 }

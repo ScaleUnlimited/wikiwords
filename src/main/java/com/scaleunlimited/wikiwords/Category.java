@@ -13,14 +13,13 @@ public class Category implements Comparable<Category>, Writable {
 
     private String _name;
     private Set<Category> _parents;
-    private boolean _marked = false;
     
     public Category() {
         this("");
     }
     
     public Category(String name) {
-        this(name, null);
+        this(name, (Set<Category>)Collections.EMPTY_SET);
     }
     
     public Category(String name, Set<Category> parents) {
@@ -48,14 +47,6 @@ public class Category implements Comparable<Category>, Writable {
         _parents = parents;
     }
     
-    public boolean isMarked() {
-        return _marked;
-    }
-
-    public void setMarked(boolean marked) {
-        _marked = marked;
-    }
-
     @Override
     public int hashCode() {
         final int prime = 31;

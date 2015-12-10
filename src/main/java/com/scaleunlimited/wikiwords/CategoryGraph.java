@@ -3,24 +3,21 @@ package com.scaleunlimited.wikiwords;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
+import java.util.LinkedList;
+import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 
 import org.apache.hadoop.io.Writable;
-import org.apache.log4j.Logger;
 
-public class CategoryGraph implements Writable, Iterable<Category> {
-    private static final Logger LOGGER = Logger.getLogger(CategoryGraph.class);
+public class CategoryGraph implements Writable {
 
-    private SortedSet<Category> _categories;
+    private Map<String, Category> _categories;
 
     public CategoryGraph() {
-        _categories = new TreeSet<>();
+        _categories = new HashMap<>();
     }
     
     public int size() {
@@ -28,190 +25,116 @@ public class CategoryGraph implements Writable, Iterable<Category> {
     }
     
     public void add(Category category) {
-        if (_categories.contains(category)) {
+        if (_categories.containsKey(category.getName())) {
             throw new IllegalArgumentException("Category already exists: " + category.getName());
         }
         
-        _categories.add(category);
+        _categories.put(category.getName(), category);
     }
     
-    public Category getCategory(Category category) {
-        SortedSet<Category> tailSet = _categories.tailSet(category);
-        if (tailSet.isEmpty()) {
-            return  null;
-        } else {
-            Category result = tailSet.first();
-            if (result.equals(category)) {
-                return result;
-            } else {
-                return null;
-            }
+    public Category get(String categoryName) {
+        return _categories.get(categoryName);
+    }
+    
+    public boolean exists(String categoryName) {
+        return _categories.containsKey(categoryName);
+    }
+    
+    public Set<String> getTree(String leafName) {
+        Category leaf = get(leafName);
+        if (leaf == null) {
+            throw new IllegalArgumentException("No category in the graph named " + leafName);
         }
+        
+        return getTree(leaf);
     }
 
-    public Set<Category> findHeads() {
-        // Heads are categories with no parents.
-        Set<Category> result = new HashSet<>();
-        for (Category category : _categories) {
-            if (!category.hasParents()) {
-                result.add(category);
-            }
-        }
-        
-        return result;
-    }
-    
-    public Set<Category> findTails() {
-        unmarkAll();
-        
-        for (Category category : _categories) {
-            // If it's already marked, then we've processed
-            // it (and its parents), so don't bother.
-            if (!category.isMarked()) {
-                for (Category parent : category.getParents()) {
-                    markTree(parent);
-                }
-            }
-        }
-        
-        Set<Category> result = new HashSet<>();
-        for (Category category : _categories) {
-            if (!category.isMarked()) {
-                result.add(category);
-            }
-        }
-        
-        return result;
-    }
-
-    public boolean hasCycles() {
-        for (Category category : _categories) {
-            unmarkAll();
-            
-            if (markTree(category)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-    
-    public int breakCycles() {
-        int numCycles = 0;
-        unmarkAll();
-        
-        // TODO would we get better results (less arbitrary breakage) by first
-        // starting at heads, and then doing the scan of remaining categories
-        // that have parents. But we'd need to build an inverted graph (with
-        // children, vs. parents).
-        
-        for (Category category : _categories) {
-            if (category.hasParents()) {
-                int numBroken = breakCycle(category);
-                if (numBroken > 0) {
-                    numCycles += numBroken;
-                    LOGGER.info(String.format("Broken %d cycles starting from %s", numBroken, category.getName()));
-                }
-                
-                unmark(category);
-            }
-        }
-        
-        return numCycles;
-    }
-    
-    private int breakCycle(Category category) {
-        int numCycles = 0;
-        
-        category.setMarked(true);
-        List<Category> parents = new ArrayList<>(category.getParents());
-        for (Category parent : parents) {
-            if (parent.isMarked()) {
-                category.getParents().remove(parent);
-                numCycles += 1;
-            } else {
-                numCycles += breakCycle(parent);
-            }
-        }
-        
-        return numCycles;
-    }
-    
-    private void unmarkAll() {
-        for (Category category : _categories) {
-            category.setMarked(false);
-        }        
-    }
-    
-    private void unmark(Category category) {
-        category.setMarked(false);
-        for (Category parent : category.getParents()) {
-            unmark(parent);
-        }
-    }
-    
     /**
-     * Mark the category, and all parents.
+     * Return the names of all categories, starting from <leaf> on up.
      * 
-     * @param category
-     * @return true if category was already marked
+     * @param leaf Starting category
+     * @return All category names in hierarchy.
      */
-    private boolean markTree(Category category) {
-        if (!category.isMarked()) {
-            category.setMarked(true);
-            for (Category parent : category.getParents()) {
-                if (markTree(parent)) {
-                    return true;
-                }
-            }
-            
-            return false;
-        } else {
-            return true;
+    public Set<String> getTree(Category leaf) {
+        Set<String> result = new HashSet<>();
+        
+        LinkedList<Category> queue = new LinkedList<>();
+        queue.push(leaf);
+        
+        while (!queue.isEmpty()) {
+            Category cat = queue.pop();
+            if (result.add(cat.getName())) {
+                // We haven't already processed it, so push parents.
+                queue.addAll(cat.getParents());
+            }            
         }
+        
+        return result;
+    }
+    
+    
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((_categories == null) ? 0 : _categories.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        CategoryGraph other = (CategoryGraph) obj;
+        if (_categories == null) {
+            if (other._categories != null)
+                return false;
+        } else if (!_categories.equals(other._categories))
+            return false;
+        return true;
     }
 
     @Override
     public void readFields(DataInput in) throws IOException {
         int numCategories = in.readInt();
         for (int i = 0; i < numCategories; i++) {
-            Category c = new Category();
-            c.readFields(in);
-            add(c);
-        }
-        
-        // Now we have to resolve all parents, as these currently aren't the
-        // actual category objects at the top level.
-        List<Category> oldParents = new ArrayList<>();
-        for (Category category : _categories) {
-           Set<Category> parents = category.getParents();
-           
-           oldParents.clear();
-           oldParents.addAll(parents);
-           parents.clear();
-           
-           for (Category parent : oldParents) {
-               Category realParent = getCategory(parent);
-               
-               // Shouldn't happen, but be safe.
-               if (realParent != null) {
-                   parents.add(realParent);
-               }
-           }
+            String categoryName = in.readUTF();
+            int numParents = in.readInt();
+            Set<Category> parents = numParents == 0 ? (Set<Category>)Collections.EMPTY_SET : new HashSet<Category>();
+            for (int j = 0; j < numParents; j++) {
+                String parentName = in.readUTF();
+                if (_categories.containsKey(parentName)) {
+                    parents.add(_categories.get(parentName));
+                } else {
+                    Category parent = new Category(parentName);
+                    parents.add(parent);
+                    _categories.put(parent.getName(), parent);
+                }
+            }
+            
+            if (_categories.containsKey(categoryName)) {
+                _categories.get(categoryName).setParents(parents);
+            } else {
+                _categories.put(categoryName, new Category(categoryName, parents));
+            }
         }
     }
 
     @Override
     public void write(DataOutput out) throws IOException {
         out.writeInt(_categories.size());
-        for (Category category : _categories) {
-            category.write(out);
+        for (Category category : _categories.values()) {
+            out.writeUTF(category.getName());
+            Set<Category> parents = category.getParents();
+            out.writeInt(parents.size());
+            for (Category parent : parents) {
+                out.writeUTF(parent.getName());
+            }
         }
-    }
-
-    @Override
-    public Iterator<Category> iterator() {
-        return _categories.iterator();
     }
 
 }

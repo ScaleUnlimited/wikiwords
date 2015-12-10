@@ -54,7 +54,7 @@ public class TfIdfAssembly extends SubAssembly {
     private static final String DOC_COUNT_PER_TERM_FN = "doc_count_per_term";
     private static final String TOTAL_DOC_COUNT_FN = "total_doc_count";
     
-    public TfIdfAssembly(Pipe termsPipe, int minTermDocCount) {
+    public TfIdfAssembly(Pipe termsPipe) {
         super(termsPipe);
         
         // For each term, we need to get a per-document count.
@@ -66,13 +66,6 @@ public class TfIdfAssembly extends SubAssembly {
                                         new Fields(TERM_COUNT_PER_DOC_FN), 
                                         Integer.class);
         // Output is DOC_FN, TERM_FN, TERM_COUNT_PER_DOC_FN
-        
-        // If the number of times the term occurs with the doc is too low, strip it out.
-        if (minTermDocCount > 0) {
-            termCountPerDocPipe = new Each( termCountPerDocPipe,
-                                            new Fields(TERM_COUNT_PER_DOC_FN),
-                                            new ExpressionFilter(String.format("$0 < %d",  minTermDocCount), Integer.class));
-        }
         
         // For each doc, we need to know the total # of terms too.
         Pipe totalCountPerDocPipe = new Pipe("total term count per doc pipe", termCountPerDocPipe);

@@ -10,6 +10,7 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Set;
 
 import org.apache.hadoop.yarn.state.Graph;
@@ -28,16 +29,8 @@ public class CategoryGraphTest {
         
         Category cat3 = new Category("cat3", new HashSet<Category>(){{add(cat2);}});
         graph.add(cat3);
-
-        Set<Category> terminals = graph.findTails();
-        assertEquals(2, terminals.size());
-        assertTrue(terminals.contains(new Category("cat1", null)));
-        assertTrue(terminals.contains(new Category("cat3", null)));
         
-        Set<Category> heads = graph.findHeads();
-        assertEquals(2, heads.size());
-        assertTrue(heads.contains(new Category("cat1", null)));
-        assertTrue(heads.contains(new Category("cat2", null)));
+        assertEquals(3, graph.size());
     }
 
     @Test
@@ -45,84 +38,41 @@ public class CategoryGraphTest {
         CategoryGraph graph = new CategoryGraph();
         Category cat2 = new Category("cat2");
         graph.add(cat2);
-
-        assertEquals(cat2, graph.getCategory(new Category("cat2")));
-        assertEquals(cat2, graph.getCategory(new Category("cat2", Category.makeSet(new Category("cat7")))));
-        assertNull(graph.getCategory(new Category("cat1")));
-        assertNull(graph.getCategory(new Category("cat3")));
+        
+        assertEquals(cat2, graph.get("cat2"));
+        assertNull(graph.get("cat1"));
     }
     
     @Test
-    public void testBinaryCycle() {
-        final Category cat1 = new Category("cat1");
-        final Category cat2 = new Category("cat2");
-        
-        cat1.setParents(new HashSet<Category>(){{add(cat2);}});
-        cat2.setParents(new HashSet<Category>(){{add(cat1);}});
-        
-        CategoryGraph graph = new CategoryGraph();
-        graph.add(cat1);
-        graph.add(cat2);
-        
-        assertEquals(0, graph.findTails().size());
-        assertTrue(graph.hasCycles());
-    }
-    
-
-    @Test
-    public void testBigCycle() {
+    public void testFindingParents() throws Exception {
         // First create a graph that starts with a single parent, and expands
         // out 2x each layer.
-        int curId = 0;
-        CategoryGraph graph = new CategoryGraph();
-        Category headCat = new Category("cat-" + curId++);
-        graph.add(headCat);
+        CategoryGraph graph = makeBinaryGraph(4);
         
-        for (int depth = 1; depth < 4; depth++) {
-            for (Category terminal : graph.findTails()) {
-                Set<Category> parents = new HashSet<>();
-                parents.add(terminal);
-                
-                // Add two children
-                graph.add(new Category("cat-" + curId++, parents));
-                graph.add(new Category("cat-" + curId++, parents));
-            }
+        assertEquals(makeSet("cat-0"), graph.getTree("cat-0"));
+        assertEquals(makeSet("cat-0", "cat-1", "cat-4", "cat-9"), graph.getTree("cat-9"));
+        
+        // Now let's add a cycle. We'll link cat-9 to cat-8, thus also adding in cat-3.
+        graph.get("cat-9").getParents().add(graph.get("cat-8"));
+        assertEquals(makeSet("cat-0", "cat-1", "cat-4", "cat-9", "cat-8", "cat-3"), graph.getTree("cat-9"));
+    }
+    
+    private Set<String> makeSet(String... strings) {
+        Set<String> result = new HashSet<>();
+        for (String s : strings) {
+            result.add(s);
         }
         
-        assertFalse(graph.hasCycles());
-        
-        // Now set the head category's parent to be one of the terminals.
-        Set<Category> headParent = new HashSet<>();
-        headParent.add(graph.getCategory(new Category("cat-" + (curId - 1))));
-        headCat.setParents(headParent);
-        
-        assertTrue(graph.hasCycles());
-        
-        assertEquals(1, graph.breakCycles());
-        assertFalse(graph.hasCycles());
+        return result;
     }
 
     @Test
     public void testWritable() throws Exception {
         // First create a graph that starts with a single parent, and expands
         // out 2x each layer.
-        int curId = 0;
-        CategoryGraph graph = new CategoryGraph();
-        Category headCat = new Category("cat-" + curId++);
-        graph.add(headCat);
+        CategoryGraph graph = makeBinaryGraph(4);
         
-        for (int depth = 1; depth < 4; depth++) {
-            for (Category terminal : graph.findTails()) {
-                Set<Category> parents = new HashSet<>();
-                parents.add(terminal);
-                
-                // Add two children
-                graph.add(new Category("cat-" + curId++, parents));
-                graph.add(new Category("cat-" + curId++, parents));
-            }
-        }
-
-        int graphSize = graph.size();
+        assertEquals(15, graph.size());
         
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutput out = new DataOutputStream(baos);
@@ -133,13 +83,42 @@ public class CategoryGraphTest {
         CategoryGraph graph2 = new CategoryGraph();
         graph2.readFields(in);
         
-        Iterator<Category> iter1 = graph.iterator();
-        Iterator<Category> iter2 = graph2.iterator();
-        while (iter1.hasNext()) {
-            assertTrue(iter2.hasNext());
-            assertTrue(iter1.next().equalsWithParents(iter2.next()));
+        assertEquals(graph, graph2);
+    }
+
+    private CategoryGraph makeBinaryGraph(int maxDepth) {
+        int curId = 0;
+        CategoryGraph graph = new CategoryGraph();
+        Category headCat = new Category("cat-" + curId++);
+        graph.add(headCat);
+        
+        LinkedList<Category> inQueue = new LinkedList<>();
+        inQueue.add(headCat);
+
+        LinkedList<Category> outQueue = new LinkedList<>();
+
+        for (int depth = 1; depth < maxDepth; depth++) {
+            while (!inQueue.isEmpty()) {
+                Set<Category> parents = new HashSet<>();
+                parents.add(inQueue.poll());
+                
+                // Add two children
+                Category leftChild = new Category("cat-" + curId++, parents);
+                graph.add(leftChild);
+                outQueue.add(leftChild);
+                
+                Category rightChild = new Category("cat-" + curId++, parents);
+                graph.add(rightChild);
+                outQueue.add(rightChild);
+            }
+            
+            // Swap queues and continue.
+            LinkedList<Category> savedQueue = inQueue;
+            inQueue = outQueue;
+            outQueue = savedQueue;
         }
         
+        return graph;
     }
     
 

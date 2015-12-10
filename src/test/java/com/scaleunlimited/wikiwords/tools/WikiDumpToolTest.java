@@ -32,42 +32,33 @@ public class WikiDumpToolTest {
         File metadataDir = new File("build/test/WikiDumpToolTest/test/metadata/");
         metadataDir.mkdirs();
         
-        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), metadataDir.getAbsolutePath(), 5, 100);
+        Map<String, Integer> counters = tool.run("src/test/resources/enwiki-snippet.xml", outputDir.getAbsolutePath(), metadataDir.getAbsolutePath(), 4, 100);
         
-        assertEquals(15, (int)counters.get(WikiDumpTool.MAIN_PAGE_COUNTER));
+        assertEquals(16, (int)counters.get(WikiDumpTool.MAIN_PAGE_COUNTER));
         assertEquals(25, (int)counters.get(WikiDumpTool.REDIRECT_PAGE_COUNTER));
         assertEquals(4, (int)counters.get(WikiDumpTool.FILE_PAGE_COUNTER));
         assertEquals(3, (int)counters.get(WikiDumpTool.DISAMBIGUATION_PAGE_COUNTER));
         assertEquals(2, (int)counters.get(WikiDumpTool.CATEGORY_PAGE_COUNTER));
         assertNull(counters.get(WikiDumpTool.EXCEPTION_COUNTER));
         
-        // We should wind up with two part files
+        // We should wind up with four part files
         assertTrue(new File(outputDir, "part-000.txt").exists());
         assertTrue(new File(outputDir, "part-001.txt").exists());
         assertTrue(new File(outputDir, "part-002.txt").exists());
-        assertFalse(new File(outputDir, "part-003.txt").exists());
+        assertTrue(new File(outputDir, "part-003.txt").exists());
+        assertFalse(new File(outputDir, "part-004.txt").exists());
 
-        // Verify each part file has 5 lines in it, tab-separated.
-        List<String> lines = IOUtils.readLines(new FileReader(new File(outputDir, "part-000.txt")));
-        assertEquals(5, lines.size());
-        for (String line : lines) {
-            assertEquals(2, line.split("\t").length);
-        }
-        
-        lines = IOUtils.readLines(new FileReader(new File(outputDir, "part-001.txt")));
-        assertEquals(5, lines.size());
-        for (String line : lines) {
-            assertEquals(2, line.split("\t").length);
-        }
-        
-        lines = IOUtils.readLines(new FileReader(new File(outputDir, "part-002.txt")));
-        assertEquals(5, lines.size());
-        for (String line : lines) {
-            assertEquals(2, line.split("\t").length);
+        // Verify each part file has 4 lines in it, tab-separated.
+        for (int i = 0; i < 4; i++) {
+            List<String> lines = IOUtils.readLines(new FileReader(new File(outputDir, String.format("part-00%d.txt", i))));
+            assertEquals(4, lines.size());
+            for (String line : lines) {
+                assertEquals(2, line.split("\t").length);
+            }
         }
         
         // Verify we got a redirects file with 25 entries
-        lines = IOUtils.readLines(new FileReader(new File(metadataDir, WikiDumpTool.REDIRECTS_FILENAME)));
+        List<String> lines = IOUtils.readLines(new FileReader(new File(metadataDir, WikiDumpTool.REDIRECTS_FILENAME)));
         assertEquals(25, lines.size());
         
         // Verify we got a dismbig file with 3 entries
@@ -85,7 +76,7 @@ public class WikiDumpToolTest {
         a2cMap.readFields(in);
         is.close();
         
-        assertEquals(8, a2cMap.size());
+        assertEquals(9, a2cMap.size());
         assertTrue(a2cMap.containsKey("Anarchism"));
         assertEquals(5, a2cMap.get("Anarchism").size());
         assertTrue(a2cMap.get("Anarchism").contains("Political_culture"));

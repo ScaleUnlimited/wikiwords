@@ -35,7 +35,8 @@ public class CategoryGraphToolTest {
         
         assertEquals(4, graph.size());
         
-        assertEquals(0, graph.getCategory(new Category("Fayetteville FireAntz players")).getParents().size());
+        assertEquals(0, graph.get("Fayetteville FireAntz players").getParents().size());
+        assertEquals(2, graph.get("Politicians from Balochistan (Pakistan)").getParents().size());
     }
 
 }
