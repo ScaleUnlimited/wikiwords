@@ -14,6 +14,8 @@ public class Category implements Comparable<Category>, Writable {
     private String _name;
     private Set<Category> _parents;
     
+    private transient int _depth;
+    
     public Category() {
         this("");
     }
@@ -33,6 +35,14 @@ public class Category implements Comparable<Category>, Writable {
 
     public void setName(String name) {
         _name = name;
+    }
+    
+    public int getDepth() {
+        return _depth;
+    }
+    
+    public void setDepth(int depth) {
+        _depth = depth;
     }
     
     public boolean hasParents() {

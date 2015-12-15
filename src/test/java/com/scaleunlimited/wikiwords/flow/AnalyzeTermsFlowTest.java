@@ -112,8 +112,8 @@ public class AnalyzeTermsFlowTest {
         }
         
         AnalyzeTermsOptions options = new AnalyzeTermsOptions(termsOptions);
-        options.setCategoryGraphFilename(categoryGraphPath.getAbsolutePath());
-        // options.setCategoryGraphFilename("/Users/kenkrugler/Downloads/categories.map");
+        // options.setCategoryGraphFilename(categoryGraphPath.getAbsolutePath());
+        options.setCategoryGraphFilename("/Users/kenkrugler/Downloads/categories.map");
         Flow flow = AnalyzeTermsFlow.createFlow(options);
         FlowResult fr = FlowRunner.run(flow);
         
@@ -158,7 +158,7 @@ public class AnalyzeTermsFlowTest {
         final float minScore = 2.0f;
         
         options.setMinArticleRefs(minArticleRefs);
-        options.setMinScore(minScore);
+        options.setMinArticleScore(minScore);
         Flow flow = AnalyzeTermsFlow.createFlow(options);
         
         FlowResult fr = FlowRunner.run(flow);

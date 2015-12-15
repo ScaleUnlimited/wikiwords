@@ -66,7 +66,8 @@ public class AnalyzeTermsTool extends BaseTool {
         
         private int _topArticleLimit = 20;
         private int _minArticleRefs = 1;
-        private double _minScore = 0.0;
+        private float _minArticleScore = 0.0f;
+        private float _minCategoryScore = 0.0f;
         private String _categoryGraphFilename;
         
         public AnalyzeTermsOptions() {
@@ -95,13 +96,22 @@ public class AnalyzeTermsTool extends BaseTool {
             return _minArticleRefs;
         }
 
-        @Option(name = "-minscore", usage = "minimum score for term<->article relationship to be valid", required = false)
-        public void setMinScore(double minScore) {
-            _minScore = minScore;
+        @Option(name = "-minarticlescore", usage = "minimum score for term<->article relationship to be valid", required = false)
+        public void setMinArticleScore(float minArticleScore) {
+            _minArticleScore = minArticleScore;
         }
         
-        public double getMinScore() {
-            return _minScore;
+        public float getMinArticleScore() {
+            return _minArticleScore;
+        }
+
+        @Option(name = "-mincategoryscore", usage = "minimum score for term<->category relationship to be valid", required = false)
+        public void setMinCategoryScore(float minCategoryScore) {
+            _minCategoryScore = minCategoryScore;
+        }
+        
+        public float getMinCategoryScore() {
+            return _minCategoryScore;
         }
 
         @Option(name = "-catgraph", usage = "path to category graph file", required = false)

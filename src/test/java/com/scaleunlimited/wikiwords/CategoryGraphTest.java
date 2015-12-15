@@ -52,9 +52,13 @@ public class CategoryGraphTest {
         assertEquals(makeSet("cat-0"), graph.getTree("cat-0"));
         assertEquals(makeSet("cat-0", "cat-1", "cat-4", "cat-9"), graph.getTree("cat-9"));
         
+        assertEquals(makeSet("cat-1", "cat-4", "cat-9"), graph.getTree("cat-9", 3));
+        
         // Now let's add a cycle. We'll link cat-9 to cat-8, thus also adding in cat-3.
         graph.get("cat-9").getParents().add(graph.get("cat-8"));
         assertEquals(makeSet("cat-0", "cat-1", "cat-4", "cat-9", "cat-8", "cat-3"), graph.getTree("cat-9"));
+        
+        assertEquals(makeSet("cat-4", "cat-9", "cat-8"), graph.getTree("cat-9", 2));
     }
     
     private Set<String> makeSet(String... strings) {

@@ -95,10 +95,10 @@ public class AnalyzeTermsFlow {
         }
         
         // See if the score is below a threshold
-        if (options.getMinScore() > 0.0) {
+        if (options.getMinArticleScore() > 0.0f) {
             termTFIDF = new Each(   termTFIDF,
                                     new Fields(TfIdfAssembly.TF_IDF_FN),
-                                    new ExpressionFilter(String.format("$0 < %f", options.getMinScore()), Float.class));
+                                    new ExpressionFilter(String.format("$0 < %f", options.getMinArticleScore()), Float.class));
         }
         
         // Group by term, sort by score, take the top N, and reorder so terms are first
@@ -119,10 +119,18 @@ public class AnalyzeTermsFlow {
         
         // Expand categories (if requested), and then sum term x category
         if (options.getCategoryGraphFilename() != null) {
-            termCategoryPipe = new Each(termCategoryPipe, new Fields(WikiCategoryDatum.CATEGORY_FN), new ExpandCategory(platform, options.getCategoryGraphFilename()), Fields.SWAP);
+            // TODO support max depth option for category depth
+            termCategoryPipe = new Each(termCategoryPipe, new Fields(WikiCategoryDatum.CATEGORY_FN), new ExpandCategory(platform, options.getCategoryGraphFilename(), 50), Fields.SWAP);
         }
         
         termCategoryPipe = new SumBy(termCategoryPipe, new Fields(TfIdfAssembly.TERM_FN, WikiCategoryDatum.CATEGORY_FN), new Fields(TfIdfAssembly.TF_IDF_FN), new Fields("category_score"), Float.class);
+        
+        // Filter if requested
+        if (options.getMinCategoryScore() > 0.0f) {
+            termCategoryPipe = new Each(termCategoryPipe,
+                                        new Fields("category_score"),
+                                        new ExpressionFilter(String.format("$0 < %f", options.getMinCategoryScore()), Float.class));
+        }
         
         BasePath termCategoryPath = options.getWorkingSubdirPath(WorkingConfig.TERM_CATEGORIES_SUBDIR_NAME);
         Tap termCategorySink = platform.makeTap(platform.makeTextScheme(), termCategoryPath, SinkMode.REPLACE);
@@ -138,14 +146,32 @@ public class AnalyzeTermsFlow {
     @SuppressWarnings("serial")
     public static class ExpandCategory extends BaseOperation<Void> implements Function<Void> {
 
+        private static final Pattern[] FILTERED_CATNAMES = new Pattern[] {
+            // Wikipedia categories named after landforms
+            // Wikipedia administration
+            Pattern.compile("Wikipedia .+"),
+            
+            // 1917 in military history
+            // 1930s
+            // Conflicts in 2012
+            Pattern.compile(".*\\d\\d\\d\\d.*"),
+            
+            // 16th century by continent
+            Pattern.compile("\\d{1,2}(st|nd|rd|th).+"),
+            
+            // {{CURRENTYEAR}}
+            Pattern.compile("\\{\\{.+\\}\\}")
+        };
+        
         private String _categoryGraphPathname;
+        private int _maxDepth;
         private BasePlatform _platform;
         
         private transient LoggingFlowProcess _flowProcess;
         private transient CategoryGraph _categoryGraph;
         private transient Tuple _result;
         
-        public ExpandCategory(BasePlatform platform, String categoryGraphPathname) {
+        public ExpandCategory(BasePlatform platform, String categoryGraphPathname, int maxDepth) {
             super(1, new Fields(WikiCategoryDatum.CATEGORY_FN));
             
             _platform = platform;
@@ -175,10 +201,22 @@ public class AnalyzeTermsFlow {
                 return;
             }
             
-            for (String catName : _categoryGraph.getTree(categoryName)) {
-                _result.setString(0, catName);
-                functionCall.getOutputCollector().add(_result);
+            for (String catName : _categoryGraph.getTree(categoryName, _maxDepth)) {
+                if (!filterCategory(catName)) {
+                    _result.setString(0, catName);
+                    functionCall.getOutputCollector().add(_result);
+                }
             }
+        }
+
+        protected boolean filterCategory(String catName) {
+            for (Pattern p : FILTERED_CATNAMES) {
+                if (p.matcher(catName).matches()) {
+                    return true;
+                }
+            }
+            
+            return false;
         }
     }
     

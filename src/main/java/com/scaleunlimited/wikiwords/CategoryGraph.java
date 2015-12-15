@@ -41,12 +41,16 @@ public class CategoryGraph implements Writable {
     }
     
     public Set<String> getTree(String leafName) {
+        return getTree(leafName, Integer.MAX_VALUE);
+    }
+
+    public Set<String> getTree(String leafName, int maxDepth) {
         Category leaf = get(leafName);
         if (leaf == null) {
             throw new IllegalArgumentException("No category in the graph named " + leafName);
         }
         
-        return getTree(leaf);
+        return getTree(leaf, maxDepth);
     }
 
     /**
@@ -56,22 +60,37 @@ public class CategoryGraph implements Writable {
      * @return All category names in hierarchy.
      */
     public Set<String> getTree(Category leaf) {
+        return getTree(leaf, Integer.MAX_VALUE);
+    }
+    
+    /**
+     * Return the names of all categories, starting from <leaf> on up.
+     * 
+     * @param leaf Starting category
+     * @return All category names in hierarchy.
+     */
+    public Set<String> getTree(Category leaf, int maxDepth) {
         Set<String> result = new HashSet<>();
         
         LinkedList<Category> queue = new LinkedList<>();
+        leaf.setDepth(0);
         queue.push(leaf);
         
         while (!queue.isEmpty()) {
             Category cat = queue.pop();
-            if (result.add(cat.getName())) {
-                // We haven't already processed it, so push parents.
-                queue.addAll(cat.getParents());
+            int catDepth = cat.getDepth();
+            // Not too deep, and we haven't already processed it, so push parents.
+            if ((catDepth < maxDepth) && result.add(cat.getName())) {
+                for (Category parent : cat.getParents()) {
+                    parent.setDepth(catDepth + 1);
+                    queue.add(parent);
+
+                }
             }            
         }
         
         return result;
     }
-    
     
     @Override
     public int hashCode() {
