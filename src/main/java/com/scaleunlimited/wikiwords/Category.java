@@ -29,6 +29,12 @@ public class Category implements Comparable<Category>, Writable {
         _parents = parents;
     }
 
+    public Category(String name, Category parent) {
+        _name = name;
+        _parents = new HashSet<>();
+        _parents.add(parent);
+    }
+
     public String getName() {
         return _name;
     }
@@ -55,6 +61,14 @@ public class Category implements Comparable<Category>, Writable {
 
     public void setParents(Set<Category> parents) {
         _parents = parents;
+    }
+    
+    public boolean addParent(Category parent) {
+        if (_parents.isEmpty()) {
+            setParents(new HashSet<Category>());
+        }
+        
+        return _parents.add(parent);
     }
     
     @Override
@@ -167,4 +181,9 @@ public class Category implements Comparable<Category>, Writable {
             out.writeUTF(parent.getName());
         }
     }
+    
+    public static String normalizeName(String name) {
+        return name.trim().toLowerCase().replaceAll(" ", "_");
+    }
+
 }

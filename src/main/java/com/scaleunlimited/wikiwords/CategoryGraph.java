@@ -36,6 +36,20 @@ public class CategoryGraph implements Writable {
         return _categories.get(categoryName);
     }
     
+    public Set<Category> getChildren(Category category) {
+        Set<Category> result = new HashSet<>();
+        for (Category cat : _categories.values()) {
+            for (Category parent : cat.getParents()) {
+                if (parent == category) {
+                    result.add(cat);
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+    
     public boolean exists(String categoryName) {
         return _categories.containsKey(categoryName);
     }
@@ -61,6 +75,27 @@ public class CategoryGraph implements Writable {
      */
     public Set<String> getTree(Category leaf) {
         return getTree(leaf, Integer.MAX_VALUE);
+    }
+    
+    public CategoryGraph invertGraph() {
+        CategoryGraph inverted = new CategoryGraph();
+        for (Category cat : _categories.values()) {
+            Category newCat = inverted.get(cat.getName());
+            if (newCat == null) {
+                newCat = new Category(cat.getName());
+                inverted.add(newCat);
+            }
+            
+            for (Category parent : cat.getParents()) {
+                if (inverted.exists(parent.getName())) {
+                    inverted.get(parent.getName()).addParent(newCat);
+                } else {
+                    inverted.add(new Category(parent.getName(), newCat));
+                }
+            }
+        }
+        
+        return inverted;
     }
     
     /**

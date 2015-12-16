@@ -34,8 +34,6 @@ public class CategoryGraphTool {
         //
         //  <category name> <tab> <parent category> | <parent category> ...
         //
-        // Category names are in the xxx_yyy format (Nevada_County).
-        //
         // There are 0...n parent categories. There can also be cyclic loops
         // in the resulting graph.
         
@@ -48,18 +46,29 @@ public class CategoryGraphTool {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] pieces = line.split("\t");
-                if (pieces.length == 1) {
-                    graph.add(new Category(pieces[0]));
-                } else if (pieces.length == 2) {
-                    Category category = new Category(pieces[0]);
-                    graph.add(category);
-                    
-                    if (categoriesWithParents.put(category, pieces[1]) != null) {
-                        LOGGER.error("Multiple entries for category " + pieces[0]);
-                    }
-                } else {
+                if ((pieces.length == 0) || (pieces.length > 2)) {
                     LOGGER.error("Invalid category line: " + line);
                     continue;
+                }
+                
+                String categoryName = Category.normalizeName(pieces[0]);
+                if (graph.exists(categoryName)) {
+                    if (categoriesWithParents.containsKey(categoryName) && (pieces.length == 2)) {
+                        LOGGER.error(String.format("Multiple entries for category '%s' (with parents), got '%s'", categoryName, pieces[0]));
+                    } else {
+                        LOGGER.warn(String.format("Multiple entries for category '%s', got '%s'", categoryName, pieces[0]));
+                    }
+                    
+                    continue;
+                }
+
+                Category cat = new Category(categoryName);
+                graph.add(cat);
+
+                if (pieces.length == 2) {
+                    if (categoriesWithParents.put(cat, pieces[1]) != null) {
+                        LOGGER.error(String.format("Multiple entries for parents of category '%s'", categoryName));
+                    }
                 }
             }
         }
@@ -74,6 +83,7 @@ public class CategoryGraphTool {
             String parentNames = categoriesWithParents.get(category);
             Set<Category> parents = new HashSet<>();
             for (String parentName : parentNames.split("\\|")) {
+                parentName = Category.normalizeName(parentName);
                 Category parent = graph.get(parentName);
                 if (parent == null) {
                     // We have a category that has a parent category that doesn't exist,

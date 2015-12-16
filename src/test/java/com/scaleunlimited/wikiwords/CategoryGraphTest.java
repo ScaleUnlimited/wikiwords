@@ -71,6 +71,21 @@ public class CategoryGraphTest {
     }
 
     @Test
+    public void testInvertingGraph() throws Exception {
+        CategoryGraph graph = makeBinaryGraph(4);
+        
+        CategoryGraph childGraph = graph.invertGraph();
+        Set<String> allCategories = new HashSet<>();
+        for (int i = 0; i < 15; i++) {
+            allCategories.add("cat-" + i);
+        }
+        
+        assertEquals(allCategories, childGraph.getTree("cat-0"));
+        assertEquals(makeSet("cat-5", "cat-11", "cat-12"), childGraph.getTree("cat-5"));
+        assertEquals(makeSet("cat-9"), childGraph.getTree("cat-9"));
+    }
+    
+    @Test
     public void testWritable() throws Exception {
         // First create a graph that starts with a single parent, and expands
         // out 2x each layer.

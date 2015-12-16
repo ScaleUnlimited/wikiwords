@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
@@ -23,6 +22,7 @@ public class CategoryExplorerTool {
     private static final Logger LOGGER = Logger.getLogger(CategoryExplorerTool.class);
 
     private CategoryGraph _categoryGraph;
+    private CategoryGraph _invertedGraph;
     
     public void load(CategoryExplorerOptions options) throws IOException {
         
@@ -37,9 +37,14 @@ public class CategoryExplorerTool {
 
     }
 
-    public void analyze(String categories) {
-        for (String category : categories.split(",")) {
-            category = category.trim();
+    public void tree() throws IOException {
+        while (true) {
+            String category = readInputLine("Category name for tree: ");
+            if (category.isEmpty()) {
+                break;
+            }
+
+            category = Category.normalizeName(category);
             if (category.isEmpty()) {
                 continue;
             }
@@ -47,35 +52,79 @@ public class CategoryExplorerTool {
             Category cat = _categoryGraph.get(category);
             if (cat == null) {
                 System.out.println(category + " doesn't exist in the graph");
-            } else {
-                System.out.println(category);
-                
-                LinkedList<Category> queue = new LinkedList<>();
-                Set<String> result = new HashSet<>();
-                cat.setDepth(0);
-                queue.add(cat);
-                
-                while (!queue.isEmpty()) {
-                    cat = queue.pop();
-                    int catDepth = cat.getDepth();
-                    // Not too deep, and we haven't already processed it, so push parents.
-                    if (result.add(cat.getName())) {
-                        for (Category parent : cat.getParents()) {
-                            parent.setDepth(catDepth + 1);
-                            queue.add(parent);
-                            
-                            for (int i = 0; i < catDepth + 1; i++) {
-                                System.out.print('\t');
-                            }
-                            
-                            System.out.println(parent.getName());
-                        }
-                    }            
-                }
+                continue;
             }
+
+            System.out.println();
+            printCategoryTree(new HashSet<String>(), cat, 0);
         }
     }
     
+    private void printCategoryTree(Set<String> processed, Category cat, int depth) {
+        if ((depth >= 5) || !processed.add(cat.getName())) {
+            return;
+        }
+
+        for (int i = 0; i < depth + 1; i++) {
+            System.out.print('\t');
+        }
+
+        System.out.println(cat);
+
+        for (Category parent : cat.getParents()) {
+            printCategoryTree(processed, parent, depth + 1);
+        }
+    }
+
+    /**
+     * Find all categories that connect to the target category.
+     * 
+     * @throws IOException
+     */
+    public void path() throws IOException {
+        while (true) {
+            String category = readInputLine("Category name for paths: ");
+            if (category.isEmpty()) {
+                break;
+            }
+
+            category = Category.normalizeName(category);
+            if (category.isEmpty()) {
+                continue;
+            }
+
+            if (_invertedGraph == null) {
+                System.out.println("Inverting graph...");
+                _invertedGraph = _categoryGraph.invertGraph();
+            }
+            
+            Category cat = _invertedGraph.get(category);
+            if (cat == null) {
+                System.out.println(category + " doesn't exist in the graph");
+                continue;
+            }
+
+            System.out.println();
+            printCategoryTree(new HashSet<String>(), cat, 0);
+        }
+    }
+    
+    private void printPathTree(Set<String> processed, Category cat, int depth) {
+        if ((depth >= 5) || !processed.add(cat.getName())) {
+            return;
+        }
+
+        for (int i = 0; i < depth + 1; i++) {
+            System.out.print('\t');
+        }
+
+        System.out.println(cat);
+
+        for (Category child : _categoryGraph.getChildren(cat)) {
+            printPathTree(processed, child, depth + 1);
+        }
+    }
+
     public static void main(String[] args) {
         CategoryExplorerOptions options = new CategoryExplorerOptions();
         CmdLineParser parser = new CmdLineParser(options);
@@ -93,12 +142,18 @@ public class CategoryExplorerTool {
             tool.load(options);
             
             while (true) {
-                String categories = readInputLine("Comma-separated list of categories: ");
-                if (categories.isEmpty()) {
+                String cmd = readInputLine("Enter command - (t)ree, (p)ath: ");
+                if (cmd.isEmpty()) {
                     break;
                 }
                 
-                tool.analyze(categories);
+                if (cmd.equals("t")) {
+                    tool.tree();
+                } else if (cmd.equals("p")) {
+                    tool.path();
+                } else {
+                    System.out.println("Unknown command: " + cmd);
+                }
             }
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
