@@ -10,6 +10,8 @@ import java.io.InputStreamReader;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.WordUtils;
 import org.apache.log4j.Logger;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -44,7 +46,8 @@ public class CategoryExplorerTool {
                 break;
             }
 
-            category = Category.normalizeName(category);
+            // Titlecase the category name
+            category = WordUtils.capitalize(category.trim());
             if (category.isEmpty()) {
                 continue;
             }
@@ -88,7 +91,8 @@ public class CategoryExplorerTool {
                 break;
             }
 
-            category = Category.normalizeName(category);
+            // Titlecase the category name
+            category = WordUtils.capitalize(category.trim());
             if (category.isEmpty()) {
                 continue;
             }

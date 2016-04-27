@@ -3,7 +3,7 @@
 Tools and Hadoop workflows to generate data that maps from words to "concepts" (Wikipedia articles) and categories.
 
 WikiDumpTool
------------
+------------
 
 Counts of various page types, from running the tool on the most recent (as of 2015-11-12) English Wikipedia dump:
 
@@ -20,3 +20,6 @@ Counts of various page types, from running the tool on the most recent (as of 20
 ```
 
 All of the "unknonw-page" counts come from `Draft:`, `Portal:`, `Help:`, `MediaWiki:`, `Book:`, `TimedText:`, and `Topic:` pages.
+
+WikiDumpTool
+------------

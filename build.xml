@@ -245,6 +245,40 @@
 	</target>
 
 	<!-- ================================================================== -->
+	<!-- Flink job jar                                                     -->
+	<!-- ================================================================== -->
+
+	<target name="flinkjar"
+	        depends="compile"
+	        description="--> create a Flink ready jar with all dependencies flattened">
+
+		<!-- Make sure lib/ dir starts out empty, so we don't get multiple
+		     copies of jars with slightly different versions
+		 -->
+		<delete dir="${build.dir}/lib" />
+		<mkdir dir="${build.dir}/lib" />
+
+		<copy todir="${build.dir}/lib" flatten="true">
+			<path refid="runtime.classpath" />
+		</copy>
+
+    	<jar jarfile="${build.dir}/deps.jar">
+			<zipgroupfileset dir="${build.dir}/lib">
+				<include name="**/*.jar" />
+			</zipgroupfileset>
+    	</jar>
+    	
+    	<sleep seconds="1" />
+    	
+		<jar destfile="${build.dir}/${flink.name}" filesetmanifest="skip">
+			<fileset dir="${build.dir.main-classes}" />
+			<fileset dir="${main.res.dir}" />
+        	<zipfileset src="${build.dir}/deps.jar" excludes="META-INF/*.SF" />
+		</jar>
+
+	</target>
+		
+	<!-- ================================================================== -->
 	<!-- Hadoop job jar                                                     -->
 	<!-- ================================================================== -->
 

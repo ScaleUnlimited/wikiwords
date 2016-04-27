@@ -51,7 +51,7 @@ public class CategoryGraphTool {
                     continue;
                 }
                 
-                String categoryName = Category.normalizeName(pieces[0]);
+                String categoryName = pieces[0];
                 if (graph.exists(categoryName)) {
                     if (categoriesWithParents.containsKey(categoryName) && (pieces.length == 2)) {
                         LOGGER.error(String.format("Multiple entries for category '%s' (with parents), got '%s'", categoryName, pieces[0]));
@@ -83,7 +83,6 @@ public class CategoryGraphTool {
             String parentNames = categoriesWithParents.get(category);
             Set<Category> parents = new HashSet<>();
             for (String parentName : parentNames.split("\\|")) {
-                parentName = Category.normalizeName(parentName);
                 Category parent = graph.get(parentName);
                 if (parent == null) {
                     // We have a category that has a parent category that doesn't exist,

@@ -68,7 +68,7 @@ public class GenerateTermsFlow {
 
     public static Flow createFlow(GenerateTermsOptions options) throws Exception {
         
-        // As a convenience, create the workfing directory if it doesn't exist.
+        // As a convenience, create the working directory if it doesn't exist.
         BasePlatform platform = options.getPlatform(GenerateTermsFlow.class);
         BasePath workingPath = options.getWorkingPath();
         workingPath.mkdirs();
@@ -98,7 +98,7 @@ public class GenerateTermsFlow {
         
         FlowDef flowDef = new FlowDef()
             .setName("Generate terms & categories")
-            .setDebugLevel(options.isDebug() ? DebugLevel.VERBOSE : DebugLevel.NONE)
+            .setDebugLevel(options.isDebugLogging() ? DebugLevel.VERBOSE : DebugLevel.NONE)
             .addSource(lines, sourceTap)
             .addTailSink(terms, termsSinkTap)
             .addTailSink(categories, categoriesSinkTap);
@@ -194,6 +194,8 @@ public class GenerateTermsFlow {
             }
         }
         
+        // In a Wikipedia URL, the title from the page has all spaces replaced by "_". Since we
+        // get URLs when finding links near terms, that's the standard format we'll use.
         private String convertTitleToArticle(String title) {
             return title.replaceAll(" ",  "_");
         }

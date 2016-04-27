@@ -158,6 +158,7 @@ public class CategoryGraph implements Writable {
         for (int i = 0; i < numCategories; i++) {
             String categoryName = in.readUTF();
             int numParents = in.readInt();
+            @SuppressWarnings("unchecked")
             Set<Category> parents = numParents == 0 ? (Set<Category>)Collections.EMPTY_SET : new HashSet<Category>();
             for (int j = 0; j < numParents; j++) {
                 String parentName = in.readUTF();

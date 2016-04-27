@@ -28,6 +28,7 @@ import com.scaleunlimited.cascading.FlowRunner;
 import com.scaleunlimited.cascading.local.LocalPlatform;
 import com.scaleunlimited.wikiwords.WikiwordsCounters;
 import com.scaleunlimited.wikiwords.WorkflowOptions;
+import com.scaleunlimited.wikiwords.WorkflowPlanner;
 import com.scaleunlimited.wikiwords.WorkingConfig;
 import com.scaleunlimited.wikiwords.datum.WikiCategoryDatum;
 import com.scaleunlimited.wikiwords.datum.WikiTermDatum;
@@ -89,7 +90,8 @@ public class GenerateTermsFlowTest {
         workingDir.mkdirs();
 
         GenerateTermsOptions options = new GenerateTermsOptions();
-        options.setDebug(true);
+        options.setPlanner(WorkflowPlanner.LOCAL);
+        options.setDebugLogging(true);
         options.setMaxDistance(1);
         options.setInputDirname(inputDirname);
         options.setWorkingDirname(workingDirname);
@@ -143,7 +145,8 @@ public class GenerateTermsFlowTest {
         workingDir.mkdirs();
 
         GenerateTermsOptions options = new GenerateTermsOptions();
-        options.setDebug(true);
+        options.setDebugLogging(true);
+        options.setPlanner(WorkflowPlanner.LOCAL);
         options.setMaxDistance(2);
         options.setInputDirname(inputDirname);
         options.setWorkingDirname(workingDirname);
@@ -208,7 +211,8 @@ public class GenerateTermsFlowTest {
         workingDir.mkdirs();
 
         GenerateTermsOptions options = new GenerateTermsOptions();
-        options.setDebug(true);
+        options.setDebugLogging(true);
+        options.setPlanner(WorkflowPlanner.LOCAL);
         options.setMaxDistance(1);
         options.setInputDirname(inputDirname);
         options.setWorkingDirname(workingDirname);
@@ -298,7 +302,8 @@ public class GenerateTermsFlowTest {
         workingDir.mkdirs();
         
         GenerateTermsOptions options = new GenerateTermsOptions();
-        options.setDebug(true);
+        options.setDebugLogging(true);
+        options.setPlanner(WorkflowPlanner.LOCAL);
         options.setMaxDistance(MAX_DISTANCE);
         options.setInputDirname(inputDirname);
         options.setWorkingDirname(workingDirname);

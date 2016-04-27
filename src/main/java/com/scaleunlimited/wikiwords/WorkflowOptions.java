@@ -1,9 +1,7 @@
 package com.scaleunlimited.wikiwords;
 
-import java.io.BufferedWriter;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -13,12 +11,17 @@ import org.kohsuke.args4j.Option;
 import com.scaleunlimited.cascading.BaseOptions;
 import com.scaleunlimited.cascading.BasePath;
 import com.scaleunlimited.cascading.BasePlatform;
+import com.scaleunlimited.cascading.flink.FlinkPlatform;
 import com.scaleunlimited.cascading.hadoop.HadoopPlatform;
 import com.scaleunlimited.cascading.local.LocalPlatform;
 
 public abstract class WorkflowOptions extends BaseOptions {
 
-    private String _workingDirname;
+    private String _workingDirname = "/working1";
+    private WorkflowPlanner _planner = WorkflowPlanner.FLINK;
+    
+    private int _sourceParallelism = -1;
+    private int _groupParallelism = -1;
     
     private transient BasePlatform _platform;
     
@@ -31,19 +34,14 @@ public abstract class WorkflowOptions extends BaseOptions {
         super();
         
         setDebugLogging(baseOptions.isDebugLogging());
-
-        _workingDirname = baseOptions._workingDirname;
+        setTraceLogging(baseOptions.isTraceLogging());
+        setDOTFile(baseOptions.getDOTFile());
+        
+        setPlanner(baseOptions.getPlanner());
+        setWorkingDirname(baseOptions.getWorkingDirname());
     }
     
-    public void setDebug(boolean debug) {
-        setDebugLogging(debug);
-    }
-    
-    public boolean isDebug() {
-        return isDebugLogging();
-    }
-
-    @Option(name = "-workingdir", usage = "working directory path", required = true)
+    @Option(name = "-workingdir", usage = "working directory path", required = false)
     public void setWorkingDirname(String workingDirname) {
         _workingDirname = workingDirname;
     }
@@ -52,15 +50,74 @@ public abstract class WorkflowOptions extends BaseOptions {
         return _workingDirname;
     }
 
+    @Option(name = "-planner", usage = "Cascading planner (local, hadoop, tez, flink)", required = false)
+    public void setPlanner(WorkflowPlanner planner) {
+        _planner = planner;
+    }
+
+    public WorkflowPlanner getPlanner() {
+        return _planner;
+    }
+
+    @Option(name = "--parsource", usage = "Parallelism for source tasks, only appliable for Flink", required = false)
+    public void setSourceParallelism(int parallelism) {
+        _sourceParallelism = parallelism;
+    }
+
+    public int getSourceParallelism() {
+        return _sourceParallelism;
+    }
+
+    @Option(name = "--pargroup", usage = "Parallelism for group tasks, only appliable for Flink", required = false)
+    public void setGroupParallelism(int parallelism) {
+        _groupParallelism = parallelism;
+    }
+
+    public int getGroupParallelism() {
+        return _groupParallelism;
+    }
+    
     public BasePlatform getPlatform(Class<?> applicationJarClass) {
         if (_platform == null) {
-            if (isDebug()) {
-                _platform = new LocalPlatform(applicationJarClass);
-            } else {
-                _platform = new HadoopPlatform(applicationJarClass);
+            switch (_planner) {
+                case LOCAL:
+                    _platform = new LocalPlatform(applicationJarClass);
+                    break;
+                    
+                case HADOOP:
+                    _platform = new HadoopPlatform(applicationJarClass);
+                    break;
+                    
+                case FLINK:
+                    _platform = new FlinkPlatform(applicationJarClass);
+                    break;
+                    
+                case TEZ:
+                    throw new IllegalArgumentException("Tez is not yet a supported platform");
+                    
+                default:
+                    throw new IllegalArgumentException("" + _planner + " is not a supported platform");
             }
         }
         
+        if (getSourceParallelism() != -1) {
+            if (_planner == WorkflowPlanner.FLINK) {
+                FlinkPlatform platform = (FlinkPlatform)_platform;
+                platform.setSourceParallelism(getSourceParallelism());
+            } else {
+                throw new IllegalArgumentException("Can't set source parallelism for non-Flink planners");
+            }
+        }
+
+        if (getGroupParallelism() != -1) {
+            if (_planner == WorkflowPlanner.FLINK) {
+                FlinkPlatform platform = (FlinkPlatform)_platform;
+                platform.setGroupParallelism(getSourceParallelism());
+            } else {
+                throw new IllegalArgumentException("Can't set group parallelism for non-Flink planners");
+            }
+        }
+
         return _platform;
     }
 

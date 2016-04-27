@@ -97,7 +97,6 @@ public class AnalyzeTermsFlowTest {
         cg.add(new Category("Mountain ranges of Iran"));
         cg.add(new Category("Mountain ranges of Russia"));
         cg.add(new Category("Mountain ranges of Turkey"));
-        cg.add(new Category("Geology of the Caucasus"));
         cg.add(new Category("Landforms of the Caucasus"));
         cg.add(new Category("Geography of Western Asia"));
         cg.add(new Category("Physiographic provinces"));
@@ -112,8 +111,8 @@ public class AnalyzeTermsFlowTest {
         }
         
         AnalyzeTermsOptions options = new AnalyzeTermsOptions(termsOptions);
-        // options.setCategoryGraphFilename(categoryGraphPath.getAbsolutePath());
-        options.setCategoryGraphFilename("/Users/kenkrugler/Downloads/categories.map");
+        options.setCategoryGraphFilename(categoryGraphPath.getAbsolutePath());
+        // options.setCategoryGraphFilename("/Users/kenkrugler/Downloads/categories.map");
         Flow flow = AnalyzeTermsFlow.createFlow(options);
         FlowResult fr = FlowRunner.run(flow);
         
@@ -129,6 +128,7 @@ public class AnalyzeTermsFlowTest {
             assertEquals(3, pieces.length);
             String term = pieces[0];
             String category = pieces[1];
+            // System.out.println(term + ": " + category);
             if (term.equals("range") && category.equals("Geography of Europe")) {
                 foundExpandedCat = true;
             }

@@ -25,12 +25,12 @@ public class Category implements Comparable<Category>, Writable {
     }
     
     public Category(String name, Set<Category> parents) {
-        _name = name;
+        setName(name);
         _parents = parents;
     }
 
     public Category(String name, Category parent) {
-        _name = name;
+        setName(name);
         _parents = new HashSet<>();
         _parents.add(parent);
     }
@@ -182,8 +182,4 @@ public class Category implements Comparable<Category>, Writable {
         }
     }
     
-    public static String normalizeName(String name) {
-        return name.trim().toLowerCase().replaceAll(" ", "_");
-    }
-
 }

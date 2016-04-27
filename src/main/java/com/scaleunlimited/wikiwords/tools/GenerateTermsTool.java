@@ -44,6 +44,10 @@ public class GenerateTermsTool extends BaseTool {
             parser.parseArgument(args);
         } catch (CmdLineException e) {
             System.err.println(e.getMessage());
+            for (String arg : args) {
+                System.out.println("\t" + arg);
+            }
+            
             printUsageAndExit(parser);
         }
 
@@ -73,14 +77,14 @@ public class GenerateTermsTool extends BaseTool {
     }
     
     public static class GenerateTermsOptions extends WorkflowOptions {
-        private String _inputDirname;
-        private int _maxDistanceToLink = 100;
+        private String _inputDirname = "s3n://su-wikidump/wikidump-20151112/data/";
+        private int _maxDistanceToLink = 10;
         
         public GenerateTermsOptions() {
             super();
         }
         
-        @Option(name = "-inputdir", usage = "path to directory containing part-xxx input files", required = true)
+        @Option(name = "-inputdir", usage = "path to directory containing part-xxx input files", required = false)
         public void setInputDirname(String inputDirname) {
             _inputDirname = inputDirname;
         }

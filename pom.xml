@@ -24,8 +24,10 @@
 	</repositories>
 	
 	<properties>
-		<cascading.version>2.6.3</cascading.version>
+        <cascading.version>3.1.0-wip-56</cascading.version>
+        <cascading.utils.version>3.1-SNAPSHOT</cascading.utils.version>
         <hadoop.version>2.6.0</hadoop.version>
+        <flink.version>0.2-SNAPSHOT</flink.version>
         <lucene.version>4.10.1</lucene.version>
 	</properties>
 	
@@ -84,7 +86,7 @@
 		<dependency>
 			<groupId>com.scaleunlimited</groupId>
 			<artifactId>cascading.utils</artifactId>
-			<version>2.6.0</version>
+			<version>${cascading.utils.version}</version>
 		</dependency>
 
         <dependency>
