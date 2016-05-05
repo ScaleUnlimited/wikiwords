@@ -4,11 +4,12 @@ export HADOOP_CONF_DIR=/etc/hadoop/conf
 -ytm 20000 \
 -yjm 2048 \
 -ys 8 \
--ynm WikiWords \
+-ynm WikiWords-generate \
 -p 20 \
 -yD taskmanager.network.numberOfBuffers=3000 \
 -yD taskmanager.memory.off-heap=true \
--c com.scaleunlimited.wikiwords.tools.AnalyzeTermsTool \
+-yD taskmanager.tmp.dirs="/tmp:/tmp:/tmp:/tmp" \
+-c com.scaleunlimited.wikiwords.tools.GenerateTermsTool \
 --classpath file:///usr/share/aws/emr/emrfs/lib/aopalliance-1.0.jar \
 --classpath file:///usr/share/aws/emr/emrfs/lib/bcpkix-jdk15on-1.51.jar \
 --classpath file:///usr/share/aws/emr/emrfs/lib/bcprov-jdk15on-1.51.jar \

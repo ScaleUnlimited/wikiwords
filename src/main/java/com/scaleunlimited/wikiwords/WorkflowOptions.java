@@ -30,18 +30,13 @@ public abstract class WorkflowOptions extends BaseOptions {
     }
     
     public WorkflowOptions(WorkflowOptions baseOptions) {
-        // TODO add constructor to BaseOptions that takes BaseOptions
-        super();
-        
-        setDebugLogging(baseOptions.isDebugLogging());
-        setTraceLogging(baseOptions.isTraceLogging());
-        setDOTFile(baseOptions.getDOTFile());
+        super(baseOptions);
         
         setPlanner(baseOptions.getPlanner());
         setWorkingDirname(baseOptions.getWorkingDirname());
     }
     
-    @Option(name = "-workingdir", usage = "working directory path", required = false)
+    @Option(name = "--workingdir", usage = "working directory path", required = false)
     public void setWorkingDirname(String workingDirname) {
         _workingDirname = workingDirname;
     }
@@ -50,7 +45,7 @@ public abstract class WorkflowOptions extends BaseOptions {
         return _workingDirname;
     }
 
-    @Option(name = "-planner", usage = "Cascading planner (local, hadoop, tez, flink)", required = false)
+    @Option(name = "--planner", usage = "Cascading planner (local, hadoop, tez, flink)", required = false)
     public void setPlanner(WorkflowPlanner planner) {
         _planner = planner;
     }

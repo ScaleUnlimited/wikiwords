@@ -84,7 +84,7 @@ public class GenerateTermsTool extends BaseTool {
             super();
         }
         
-        @Option(name = "-inputdir", usage = "path to directory containing part-xxx input files", required = false)
+        @Option(name = "--inputdir", usage = "path to directory containing part-xxx input files", required = false)
         public void setInputDirname(String inputDirname) {
             _inputDirname = inputDirname;
         }
@@ -93,7 +93,7 @@ public class GenerateTermsTool extends BaseTool {
             return _inputDirname;
         }
 
-        @Option(name = "-maxdistance", usage = "maximum # of terms before/after Wiki article link", required = false)
+        @Option(name = "--maxdistance", usage = "maximum # of terms before/after Wiki article link", required = false)
         public void setMaxDistance(int maxDistanceToLink) {
             _maxDistanceToLink = maxDistanceToLink;
         }
